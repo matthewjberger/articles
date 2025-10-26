@@ -6,13 +6,6 @@ Personal blog for technical writing on Rust, embedded systems, robotics, and sof
 
 This blog is built with Jekyll using the [Minimal Mistakes](https://github.com/mmistakes/minimal-mistakes) theme and deployed to GitHub Pages.
 
-## Author
-
-**Matthew Berger**
-Staff Software Engineer
-Email: matthewjordanberger@gmail.com
-GitHub: [matthewjberger](https://github.com/matthewjberger)
-
 ## Local Development
 
 ```bash
