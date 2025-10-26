@@ -20,7 +20,7 @@ description: >- # this means to ignore newlines until "baseurl:"
   Founding engineer at Hyphen, building safety-critical software for automated
   restaurant systems.
 github_username: matthewjberger
-minimal_mistakes_skin: default
+minimal_mistakes_skin: dark
 search: true
 
 # Build settings
