@@ -16,9 +16,7 @@
 title: Matthew Berger
 email: matthewjordanberger@gmail.com
 description: >- # this means to ignore newlines until "baseurl:"
-  Staff Software Engineer specializing in Rust, embedded systems, and robotics.
-  Founding engineer at Hyphen, building safety-critical software for automated
-  restaurant systems.
+  A passionate software architect automating the food industry with Rust 🦀🤖🥗
 github_username: matthewjberger
 minimal_mistakes_skin: dark
 search: true
@@ -59,7 +57,7 @@ plugins:
 author:
   name   : "Matthew Berger"
   avatar : "/assets/images/bio-photo.jpg"
-  bio    : "Staff Software Engineer specializing in Rust, embedded systems, and robotics. Founding engineer at Hyphen."
+  bio    : "A passionate software architect automating the food industry with Rust 🦀🤖🥗"
   links:
     - label: "Email"
       icon: "fas fa-fw fa-envelope"
