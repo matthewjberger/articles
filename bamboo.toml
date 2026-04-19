@@ -1,0 +1,34 @@
+title = "Matthew Berger"
+base_url = "https://matthewberger.dev/articles"
+description = "A passionate software architect automating the food industry with Rust 🦀🤖🥗"
+author = "Matthew J. Berger"
+language = "en"
+posts_per_page = 5
+
+[extra]
+og_image = "/bio-photo.jpg"
+
+[extra.author_profile]
+name = "Matthew Berger"
+avatar = "/bio-photo.jpg"
+bio = "Founding engineer automating the food industry with Rust."
+
+[[extra.author_profile.links]]
+label = "Portfolio"
+url = "https://matthewberger.dev"
+icon = "briefcase"
+
+[[extra.author_profile.links]]
+label = "Email"
+url = "mailto:matthewjordanberger@gmail.com"
+icon = "envelope"
+
+[[extra.author_profile.links]]
+label = "GitHub"
+url = "https://github.com/matthewjberger"
+icon = "github"
+
+[[extra.author_profile.links]]
+label = "RSS"
+url = "/rss.xml"
+icon = "rss"
