@@ -1,6 +1,6 @@
 # Articles
 
-Technical writing on Rust, embedded systems, robotics, and software engineering. Deployed at [matthewberger.dev/articles](https://matthewberger.dev/articles), built with [bamboo](https://github.com/matthewjberger/bamboo).
+Long-form notes on the systems I write in my own time. Game engines, graphics, language design, derive macros, cross-platform Rust, and the libraries that fall out of all of it. Deployed at [matthewberger.dev/articles](https://matthewberger.dev/articles), built with [bamboo](https://github.com/matthewjberger/bamboo).
 
 ## Prerequisites
 
@@ -32,15 +32,15 @@ just build   # one-shot build to dist/
     └── bio-photo.jpg
 ```
 
-New posts go in `content/posts/` with a date-prefixed filename and TOML frontmatter:
+New posts go in `content/posts/` with a date-prefixed filename and TOML frontmatter. Set `draft = true` to keep a post in source control without publishing it; remove the line (or set to `false`) when it's ready.
 
 ```markdown
 +++
 title = "My Post"
-date = "2024-05-01"
 tags = ["rust"]
 categories = ["engineering"]
 excerpt = "One-line summary shown in cards."
+draft = true
 +++
 
 Markdown body here.
@@ -48,4 +48,4 @@ Markdown body here.
 
 ## License
 
-MIT.
+Dual-licensed under [Apache 2.0](LICENSE-APACHE) and [MIT](LICENSE-MIT) at your option.
