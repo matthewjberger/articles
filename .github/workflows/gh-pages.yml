@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  BAMBOO_CLI_VERSION: "0.5.3"
+  BAMBOO_CLI_VERSION: "0.5.4"
 
 jobs:
   build:
