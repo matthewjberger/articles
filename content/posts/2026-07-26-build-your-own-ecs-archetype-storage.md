@@ -171,7 +171,7 @@ pub const POSITION: u64 = 1 << 0;
 pub const VELOCITY: u64 = 1 << 1;
 ```
 
-A `u64` mask gives us 64 component types per world. That is the practical ceiling of this design. If you need more, you split the world (a topic for later). 64 is enough for most games.
+A `u64` mask gives us 64 component types per world. That is the practical ceiling of this design. 64 is enough for most games. If you need more, freecs has a multi-world macro form that splits components across logical worlds with a shared entity allocator, mentioned at the end of part 3.
 
 ## The archetype table
 
