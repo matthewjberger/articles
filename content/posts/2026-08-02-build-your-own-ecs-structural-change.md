@@ -405,7 +405,7 @@ impl World {
 
 Two loops. The first walks the existing tables and sets edges *into* the new table from any older table that is one bit-flip away. The second walks the component bits and sets edges *out of* the new table to any older table that is one bit-flip away in the other direction. For each component bit, the add-side destination is `mask | bit` and the remove-side destination is `mask & !bit` (only meaningful when the bit was set in `mask`). The lookups are hashmap gets, but they happen once per bit at table-creation time rather than every time an entity migrates.
 
-The reason the second loop is needed at all is that the first loop only walks tables that already exist at creation time, and only sets edges from those older tables to the new one. Outgoing edges from the new table to older tables would never be filled by future creations either, because the trigger for the first loop is "a newer table is being created and reaches back to me." We do both halves on creation, which means every cached path is hot from the moment a table exists.
+The second loop exists because the first one is one-directional. A future table creation will wire its own incoming edges from the older tables that were around when it appeared, but it will not reach back and fill outgoing edges on those older tables. So the new table's outgoing edges have one opportunity to be set, and that opportunity is now. Filling them on creation makes every cached migration path hot from the moment both endpoints exist.
 
 Now `add_components` for a single-bit mask hits the edge cache.
 
