@@ -208,7 +208,7 @@ site.posts.par_iter().try_for_each(|post| {
 })?;
 ```
 
-A `Tera` instance is `Send + Sync` after all templates are registered, so the renderer captures it by reference into the closure. No locks.
+Templates are registered up front and never mutated afterward. The renderer captures the `Tera` instance by reference into each closure. `Tera` is `Send + Sync`, so the parallel pass works without locks.
 
 ## Asset pipeline
 
@@ -256,7 +256,7 @@ Each output is its own module taking the in-memory `Site` and writing a single f
 
 The XML files are produced with `format!` and a tiny `xml::escape` helper for the five special characters. For five entities and a handful of fixed templates this is fine. For anything with attributes-in-elements or namespaces I would reach for a real serializer.
 
-The search index is a JSON array of `{ title, url, tags, date, excerpt, content }` objects, where `content` is the rendered HTML run through `strip_html_tags` and truncated to 5000 characters. The default theme's search page pulls the file at request time and feeds it to [Fuse.js](https://fusejs.io/) client-side. There is no server-side search component because there is no server.
+The search index is a JSON array of `{ title, url, tags, date, excerpt, content }` objects, where `content` is the rendered HTML run through `strip_html_tags` and truncated to 5000 characters per entry — small enough that the client-side Fuse.js search stays responsive even on sites with hundreds of posts. The default theme's search page pulls the file at request time and feeds it to [Fuse.js](https://fusejs.io/) client-side. There is no server-side search component because there is no server.
 
 ## Internal link validation
 
@@ -313,7 +313,7 @@ Configurable markdown extensions. pulldown-cmark options are hardcoded: tables, 
 
 A theme registry. Themes are directories. The built-in is embedded. I have not built infrastructure to publish or install third-party themes because nobody has asked.
 
-## Dependency list, worth calling out
+## Dependencies
 
 A few non-obvious choices:
 
