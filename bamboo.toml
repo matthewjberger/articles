@@ -1,6 +1,6 @@
 title = "Matthew Berger"
 base_url = "https://matthewberger.dev/articles"
-description = "A passionate software architect automating the food industry with Rust 🦀🤖🥗"
+description = "Experienced software engineer with a passion for graphics and Rust"
 author = "Matthew J. Berger"
 language = "en"
 posts_per_page = 5
@@ -11,7 +11,7 @@ og_image = "/bio-photo.jpg"
 [extra.author_profile]
 name = "Matthew Berger"
 avatar = "/bio-photo.jpg"
-bio = "Founding engineer automating the food industry with Rust."
+bio = "Experienced software engineer with a passion for graphics and Rust"
 
 [[extra.author_profile.links]]
 label = "Portfolio"
