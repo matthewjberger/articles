@@ -7,9 +7,9 @@ series = "ecs"
 series_part = 3
 +++
 
-*This is part 3 of 3 of a series.* ← [Structural change and queries](@/posts/2026-08-02-build-your-own-ecs-structural-change.md)
+*This is part 3 of 3 of a series.* ← [Structural change and queries](@/posts/2026-04-12-build-your-own-ecs-structural-change.md)
 
-[Part 2](@/posts/2026-08-02-build-your-own-ecs-structural-change.md) finished with a working archetype ECS. Spawn into an archetype, add and remove components at runtime, query and iterate by component combination, despawn safely. The storage is solid, the routing is fast, and you could build a small game on it. What you could not do was build a *frame loop* on it. The missing pieces are the things systems use to talk to each other and to the world structurally.
+[Part 2](@/posts/2026-04-12-build-your-own-ecs-structural-change.md) finished with a working archetype ECS. Spawn into an archetype, add and remove components at runtime, query and iterate by component combination, despawn safely. The storage is solid, the routing is fast, and you could build a small game on it. What you could not do was build a *frame loop* on it. The missing pieces are the things systems use to talk to each other and to the world structurally.
 
 This post adds four pieces. Change detection records what moved so other systems can do incremental work instead of touching everything each frame. Events let one system message another across the schedule without coupling them. Sparse-set tags carry markers that flip too often to live in the archetype mask. Command buffers queue mutations during iteration so the loop does not invalidate itself. A small system schedule at the end runs the four in order.
 

@@ -8,7 +8,7 @@ series_part = 1
 series_title = "Build your own ECS"
 +++
 
-*This is part 1 of 3 of a series.* Next → [Structural change and queries](@/posts/2026-08-02-build-your-own-ecs-structural-change.md)
+*This is part 1 of 3 of a series.* Next → [Structural change and queries](@/posts/2026-04-12-build-your-own-ecs-structural-change.md)
 
 ECS stands for Entity Component System. An entity is a handle, a small id with no data and no methods. A component is a struct of data attached to an entity, like `Position` or `Velocity`. A system is a function that reads or writes components on the entities that match a query, like "every entity with both Position and Velocity." The data lives in components, the work happens in systems, and entities are the keys that line them up.
 

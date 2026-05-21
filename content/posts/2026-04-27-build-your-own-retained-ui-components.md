@@ -8,7 +8,7 @@ series_part = 1
 series_title = "Build your own retained UI"
 +++
 
-*This is part 1 of 3 of a series.* Next → [Layout and interaction](@/posts/2026-05-21-build-your-own-retained-ui-layout-interaction.md)
+*This is part 1 of 3 of a series.* Next → [Layout and interaction](@/posts/2026-05-02-build-your-own-retained-ui-layout-interaction.md)
 
 A retained UI is a UI where the widget tree exists as data between frames. You build the tree once at startup, mutate slots in response to events, and the layout and rendering systems work on whatever is in the tree this frame. An immediate-mode UI does the opposite: the application code calls draw functions every frame and the UI library remembers nothing across frames except a hash table of widget state. Both designs work. Retained scales better when the UI is large, has many independent panels, or has to react to non-UI events (network messages, async loads) outside the per-frame call chain.
 
@@ -20,7 +20,7 @@ End state at part 3 is around 1200 lines of straightforward Rust. Rectangles, te
 
 Aimed at Rust developers who want to understand how a retained UI is shaped, well enough to write one or to read a production crate without guessing.
 
-What gets built over the series is the kernel of the retained UI in [nightshade](https://github.com/matthewjberger/nightshade), my game engine. The kernel sits on top of [freecs](https://github.com/matthewjberger/freecs), the archetype ECS I covered in the [previous three-part series](@/posts/2026-07-26-build-your-own-ecs-archetype-storage.md). Each widget is an entity, each capability is a component, and the systems walk the world the same way the physics step did in the ECS posts. A parallel Go implementation lives in [indigo](https://github.com/matthewjberger/indigo). I used it as a smaller-scale reference for the same architecture, and it's a useful cross-check that the ideas are not Rust-specific.
+What gets built over the series is the kernel of the retained UI in [nightshade](https://github.com/matthewjberger/nightshade), my game engine. The kernel sits on top of [freecs](https://github.com/matthewjberger/freecs), the archetype ECS I covered in the [previous three-part series](@/posts/2026-04-07-build-your-own-ecs-archetype-storage.md). Each widget is an entity, each capability is a component, and the systems walk the world the same way the physics step did in the ECS posts. A parallel Go implementation lives in [indigo](https://github.com/matthewjberger/indigo). I used it as a smaller-scale reference for the same architecture, and it's a useful cross-check that the ideas are not Rust-specific.
 
 ## Why an ECS
 
@@ -34,7 +34,7 @@ Adding a new capability is a one-line addition. A `UiTooltip { text: String }` c
 
 Adding a new system that touches every visible widget (theme color crossfading, focus-ring drawing, change detection for incremental rendering) does not require editing every widget type. It iterates `for_each_mut(UI_NODE, ...)` and is one function.
 
-Group data by how it gets accessed, not by what kind of widget it is. The same shape that worked for `Position + Velocity` in the [archetype ECS](@/posts/2026-07-26-build-your-own-ecs-archetype-storage.md) works for `UiNode + UiColor`.
+Group data by how it gets accessed, not by what kind of widget it is. The same shape that worked for `Position + Velocity` in the [archetype ECS](@/posts/2026-04-07-build-your-own-ecs-archetype-storage.md) works for `UiNode + UiColor`.
 
 ## What "retained" actually buys
 
@@ -203,7 +203,7 @@ ecs! {
 
 The macro stamps out the `World` type, the per-archetype `ComponentArrays`, the typed accessors (`get_ui_node`, `set_ui_node`, `get_ui_node_mut`, `entity_has_ui_node`), and the mask constants (`UI_NODE`, `UI_COLOR`, etc.) that identify each component bit.
 
-If you would rather hand-roll this, the equivalent is the kernel from the [first ECS post](@/posts/2026-07-26-build-your-own-ecs-archetype-storage.md), extended with one field per component on `ComponentArrays` and the matching fan-out on `spawn`, `despawn`, `move_entity`, and the getters. We are not doing it again here. The macro is the right call for this kind of fan-out.
+If you would rather hand-roll this, the equivalent is the kernel from the [first ECS post](@/posts/2026-04-07-build-your-own-ecs-archetype-storage.md), extended with one field per component on `ComponentArrays` and the matching fan-out on `spawn`, `despawn`, `move_entity`, and the getters. We are not doing it again here. The macro is the right call for this kind of fan-out.
 
 ## A small builder
 
@@ -345,7 +345,7 @@ impl<'a> UiBuilder<'a> {
 }
 ```
 
-The setter chain (`color`, `text`, `interactive`) operates on the cursor. Each setter migrates the cursor entity into the right archetype if it does not already have the component, then writes the value through the typed accessor. Adding components to an existing entity is the structural-change machinery from [part two of the ECS series](@/posts/2026-08-02-build-your-own-ecs-structural-change.md). The entity moves from `UI_NODE` to `UI_NODE | UI_COLOR` on the first `.color(...)` call, then to `UI_NODE | UI_COLOR | UI_TEXT` on the first `.text(...)`. By the time the chain ends, the entity sits in exactly the archetype its declared components imply.
+The setter chain (`color`, `text`, `interactive`) operates on the cursor. Each setter migrates the cursor entity into the right archetype if it does not already have the component, then writes the value through the typed accessor. Adding components to an existing entity is the structural-change machinery from [part two of the ECS series](@/posts/2026-04-12-build-your-own-ecs-structural-change.md). The entity moves from `UI_NODE` to `UI_NODE | UI_COLOR` on the first `.color(...)` call, then to `UI_NODE | UI_COLOR | UI_TEXT` on the first `.text(...)`. By the time the chain ends, the entity sits in exactly the archetype its declared components imply.
 
 This is a one-time per-entity cost paid at build time, not a per-frame cost. The runtime sees the entity in its final archetype.
 

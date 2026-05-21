@@ -7,9 +7,9 @@ series = "retained-ui"
 series_part = 3
 +++
 
-*This is part 3 of 3 of a series.* ← [Layout and interaction](@/posts/2026-05-21-build-your-own-retained-ui-layout-interaction.md)
+*This is part 3 of 3 of a series.* ← [Layout and interaction](@/posts/2026-05-02-build-your-own-retained-ui-layout-interaction.md)
 
-[Part 2](@/posts/2026-05-21-build-your-own-retained-ui-layout-interaction.md) finished with a UI that knew where every widget was on screen and what the user was doing with the cursor. The layout system wrote `resolved` rects into every `UiNode`, the interaction system updated per-entity flags and pushed events. Buttons fired clicks. The application could route those events to its own code. The one thing the UI still could not do was *appear*. The window was blank.
+[Part 2](@/posts/2026-05-02-build-your-own-retained-ui-layout-interaction.md) finished with a UI that knew where every widget was on screen and what the user was doing with the cursor. The layout system wrote `resolved` rects into every `UiNode`, the interaction system updated per-entity flags and pushed events. Buttons fired clicks. The application could route those events to its own code. The one thing the UI still could not do was *appear*. The window was blank.
 
 This post puts the pixels on the screen. The architecture is wgpu, the same low-level GPU API nightshade uses. The render pass walks the laid-out tree once per frame, packs every visible widget into per-instance data, and submits two draws. One draw renders every rectangle as a signed-distance-field rounded rect with optional border, fill, and shadow, all from one shader. The other draw renders every glyph against a bitmap font atlas. Both are instanced. One vertex buffer (a unit quad), N instances, one `draw_indexed` call.
 
@@ -1054,4 +1054,4 @@ None of those require revisiting parts one or two. Adding a widget type means ad
 
 [nightshade](https://github.com/matthewjberger/nightshade) is the production version. Its retained UI runs every interactive surface in the engine (the editor, the in-game HUD, the widget gallery) and shares the same `World` with the rest of the game. The Go implementation at [indigo](https://github.com/matthewjberger/indigo) is around 800 lines, almost a direct translation of the same architecture, and a useful cross-check that the ideas are not Rust-specific.
 
-The retained UI is the last system this series covers, sitting on top of the [archetype ECS](@/posts/2026-07-26-build-your-own-ecs-archetype-storage.md), the [structural change and queries](@/posts/2026-08-02-build-your-own-ecs-structural-change.md), and the [events, change detection, tags, and commands](@/posts/2026-08-09-build-your-own-ecs-events-changes-tags-commands.md). Both ship in nightshade as the foundation everything else builds on.
+The retained UI is the last system this series covers, sitting on top of the [archetype ECS](@/posts/2026-04-07-build-your-own-ecs-archetype-storage.md), the [structural change and queries](@/posts/2026-04-12-build-your-own-ecs-structural-change.md), and the [events, change detection, tags, and commands](@/posts/2026-04-17-build-your-own-ecs-events-changes-tags-commands.md). Both ship in nightshade as the foundation everything else builds on.

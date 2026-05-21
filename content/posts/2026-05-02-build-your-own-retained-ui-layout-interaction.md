@@ -7,9 +7,9 @@ series = "retained-ui"
 series_part = 2
 +++
 
-*This is part 2 of 3 of a series.* ← [Components and tree](@/posts/2026-05-21-build-your-own-retained-ui-components.md) | Next → [Rendering with wgpu](@/posts/2026-05-21-build-your-own-retained-ui-wgpu-rendering.md)
+*This is part 2 of 3 of a series.* ← [Components and tree](@/posts/2026-04-27-build-your-own-retained-ui-components.md) | Next → [Rendering with wgpu](@/posts/2026-05-07-build-your-own-retained-ui-wgpu-rendering.md)
 
-[Part 1](@/posts/2026-05-21-build-your-own-retained-ui-components.md) built the storage. A `UiNode` on every widget, optional `UiColor`/`UiText`/`UiInteractive` for the capabilities, a `UiParent` on every child that encodes the tree, and a builder that constructs a small hierarchy. By the end of it you had a panel with two buttons inside it as ECS entities, but no system did anything with them. The buttons did not have resolved screen positions and a mouse click anywhere on the window produced nothing.
+[Part 1](@/posts/2026-04-27-build-your-own-retained-ui-components.md) built the storage. A `UiNode` on every widget, optional `UiColor`/`UiText`/`UiInteractive` for the capabilities, a `UiParent` on every child that encodes the tree, and a builder that constructs a small hierarchy. By the end of it you had a panel with two buttons inside it as ECS entities, but no system did anything with them. The buttons did not have resolved screen positions and a mouse click anywhere on the window produced nothing.
 
 This post adds the two systems that turn the storage into something interactive. The layout system walks the tree once per frame and writes each entity's resolved screen-space rect into `UiNode::resolved`. The interaction system reads those rects, finds the topmost widget under the cursor, and writes per-entity hover/pressed/clicked flags plus a global event queue. A button becomes clickable when both systems run.
 
@@ -129,7 +129,7 @@ pub fn mark_layout_dirty(world: &mut World) {
 }
 ```
 
-Every mutator the application uses (`set_status`, `set_visible`, the typed `get_ui_node_mut`) should call `mark_layout_dirty` when it changes something that affects placement. A tighter design would invalidate the cache from inside the mutator itself, hooked into the change-detection ticks from [part three of the ECS series](@/posts/2026-08-09-build-your-own-ecs-events-changes-tags-commands.md). The hand-rolled approach is to call `mark_layout_dirty` at the call site. We will take the simpler route.
+Every mutator the application uses (`set_status`, `set_visible`, the typed `get_ui_node_mut`) should call `mark_layout_dirty` when it changes something that affects placement. A tighter design would invalidate the cache from inside the mutator itself, hooked into the change-detection ticks from [part three of the ECS series](@/posts/2026-04-17-build-your-own-ecs-events-changes-tags-commands.md). The hand-rolled approach is to call `mark_layout_dirty` at the call site. We will take the simpler route.
 
 ## Placing the roots
 
@@ -643,7 +643,7 @@ for event in events {
 }
 ```
 
-Same idea as the [double-buffered event queue from part three of the ECS series](@/posts/2026-08-09-build-your-own-ecs-events-changes-tags-commands.md), simplified for the UI case. The UI event queue does not need the two-frame readability rule because the events are produced and consumed within the same frame. Drained at the end of the frame, fresh at the start.
+Same idea as the [double-buffered event queue from part three of the ECS series](@/posts/2026-04-17-build-your-own-ecs-events-changes-tags-commands.md), simplified for the UI case. The UI event queue does not need the two-frame readability rule because the events are produced and consumed within the same frame. Drained at the end of the frame, fresh at the start.
 
 A production retained UI would generalize this into a typed event system (`world.send_event(SliderChanged { value })`, `world.drain_events::<SliderChanged>()`) so that different event types do not all share one heterogenous `UiEvent` enum. The macro layer in nightshade's `ecs!` declaration handles that fan-out. We are doing it by hand with a single enum.
 

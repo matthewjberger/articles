@@ -7,9 +7,9 @@ series = "ecs"
 series_part = 2
 +++
 
-*This is part 2 of 3 of a series.* ← [Archetype storage](@/posts/2026-07-26-build-your-own-ecs-archetype-storage.md) | Next → [Change detection, events, tags, and commands](@/posts/2026-08-09-build-your-own-ecs-events-changes-tags-commands.md)
+*This is part 2 of 3 of a series.* ← [Archetype storage](@/posts/2026-04-07-build-your-own-ecs-archetype-storage.md) | Next → [Change detection, events, tags, and commands](@/posts/2026-04-17-build-your-own-ecs-events-changes-tags-commands.md)
 
-[Part 1](@/posts/2026-07-26-build-your-own-ecs-archetype-storage.md) built the storage. Generational entity handles, archetype tables, and the routing layer that ties them together. By the end of it you could spawn entities into a specific archetype, read and write their components, and despawn them safely. What you could *not* do was change an entity's components after spawn time, and you had no way to ask the world "give me every entity that has X."
+[Part 1](@/posts/2026-04-07-build-your-own-ecs-archetype-storage.md) built the storage. Generational entity handles, archetype tables, and the routing layer that ties them together. By the end of it you could spawn entities into a specific archetype, read and write their components, and despawn them safely. What you could *not* do was change an entity's components after spawn time, and you had no way to ask the world "give me every entity that has X."
 
 This post fixes both. The core mechanic is the same as before. Archetypes are defined by their component set, so changing an entity's component set means physically moving the entity to a different table. Once that move is in place, queries are almost trivial. They are a walk over the tables whose mask satisfies the query.
 
