@@ -3,6 +3,8 @@ title = "Build your own ECS (part 3), change detection, events, tags, and comman
 tags = ["rust", "ecs", "game-engine", "tutorial"]
 categories = ["rust"]
 excerpt = "The four subsystems that turn the storage layer into something a real game engine can sit on top of. A watermark-based change detector, double-buffered events, sparse-set tags, and a deferred command buffer."
+series = "ecs"
+series_part = 3
 +++
 
 *This is part 3 of 3 of a series.* ← [Structural change and queries](@/posts/2026-08-02-build-your-own-ecs-structural-change.md)

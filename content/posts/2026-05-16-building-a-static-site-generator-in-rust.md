@@ -154,7 +154,7 @@ This is **emphasized**.
 
 emits a note containing `<strong>emphasized</strong>`.
 
-The processor tracks fenced code blocks (triple-backtick and triple-tilde) so a shortcode tag inside a code block stays literal. It does *not* track inline single-backtick code spans, which means an inline-code example of an opening shortcode delimiter in prose still gets parsed as a real shortcode and triggers a hard error. I noticed this writing the draft of this post — the first build failed on a one-liner mention of the delimiter in flowing text, and the fix was to move every shortcode example into a fenced block instead. The scanning is hand-rolled because the shortcode pass runs before pulldown-cmark, so I cannot lean on its code-fence detection. Properly handling inline backticks belongs on the same list.
+The processor tracks fenced code blocks (triple-backtick and triple-tilde) so a shortcode tag inside a code block stays literal. It does *not* track inline single-backtick code spans, which means an inline-code example of an opening shortcode delimiter in prose still gets parsed as a real shortcode and triggers a hard error. I noticed this writing the draft of this post. The first build failed on a one-liner mention of the delimiter in flowing text, and the fix was to move every shortcode example into a fenced block instead. The scanning is hand-rolled because the shortcode pass runs before pulldown-cmark, so I cannot lean on its code-fence detection. Properly handling inline backticks belongs on the same list.
 
 One special shortcode renders no template:
 
@@ -256,7 +256,7 @@ Each output is its own module taking the in-memory `Site` and writing a single f
 
 The XML files are produced with `format!` and a tiny `xml::escape` helper for the five special characters. For five entities and a handful of fixed templates this is fine. For anything with attributes-in-elements or namespaces I would reach for a real serializer.
 
-The search index is a JSON array of `{ title, url, tags, date, excerpt, content }` objects, where `content` is the rendered HTML run through `strip_html_tags` and truncated to 5000 characters per entry — small enough that the client-side Fuse.js search stays responsive even on sites with hundreds of posts. The default theme's search page pulls the file at request time and feeds it to [Fuse.js](https://fusejs.io/) client-side. There is no server-side search component because there is no server.
+The search index is a JSON array of `{ title, url, tags, date, excerpt, content }` objects, where `content` is the rendered HTML run through `strip_html_tags` and truncated to 5000 characters per entry. That ceiling is small enough that the client-side Fuse.js search stays responsive even on sites with hundreds of posts. The default theme's search page pulls the file at request time and feeds it to [Fuse.js](https://fusejs.io/) client-side. There is no server-side search component because there is no server.
 
 ## Internal link validation
 

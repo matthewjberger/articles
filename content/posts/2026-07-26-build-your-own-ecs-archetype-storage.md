@@ -3,6 +3,9 @@ title = "Build your own ECS (part 1), archetype storage"
 tags = ["rust", "ecs", "game-engine", "tutorial"]
 categories = ["rust"]
 excerpt = "An ECS, built from nothing, in three posts. Part 1 lays down the storage. Generational entity handles and archetype tables in struct-of-arrays layout."
+series = "ecs"
+series_part = 1
+series_title = "Build your own ECS"
 +++
 
 *This is part 1 of 3 of a series.* Next → [Structural change and queries](@/posts/2026-08-02-build-your-own-ecs-structural-change.md)

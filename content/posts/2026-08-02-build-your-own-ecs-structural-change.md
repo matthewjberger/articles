@@ -3,6 +3,8 @@ title = "Build your own ECS (part 2), structural change and queries"
 tags = ["rust", "ecs", "game-engine", "tutorial"]
 categories = ["rust"]
 excerpt = "Adding and removing components at runtime by migrating entities between archetypes, walking tables to satisfy queries, and the two caches that make both operations fast."
+series = "ecs"
+series_part = 2
 +++
 
 *This is part 2 of 3 of a series.* ← [Archetype storage](@/posts/2026-07-26-build-your-own-ecs-archetype-storage.md) | Next → [Change detection, events, tags, and commands](@/posts/2026-08-09-build-your-own-ecs-events-changes-tags-commands.md)
