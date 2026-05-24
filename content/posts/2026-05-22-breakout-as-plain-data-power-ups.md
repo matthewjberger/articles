@@ -29,7 +29,6 @@ pub enum PowerupKind {
     Shield,
     SlowMo,
     Laser,
-    DarkLights,
 }
 
 #[derive(Default, Clone, Copy, Debug)]
@@ -81,14 +80,13 @@ for catch in caught {
 
 ## Choice one: a flag with a timer, in a resource
 
-Most power-ups change a global condition for a while. Slow motion makes everything move slower. Dark mode dims the field. A wide paddle is wider until it is not. None of these belongs to a single entity, so they live in a resource, a duration counting down:
+Most power-ups change a global condition for a while. Slow motion makes everything move slower. A wide paddle is wider until it is not. The laser arms the paddle for a few seconds. None of these belongs to a single entity, so they live in a resource, a duration counting down:
 
 ```rust
 #[derive(Default, Clone, Copy)]
 pub struct Effects {
     pub wide_remaining: f32,
     pub laser_remaining: f32,
-    pub dark_remaining: f32,
 }
 
 #[derive(Default, Clone, Copy)]
@@ -156,6 +154,8 @@ let scaled_delta = delta_time * scale;
 ```
 
 That is the entire mechanism. The slow-motion power-up sets `time_warp.remaining`, a tick system counts it down, and every system that integrates motion reads the flag and scales its step. The power-up "changes how time passes for the whole game" without a single object knowing it has been slowed. It is a global condition, so it is a global, read where it matters.
+
+`laser_remaining` works the same way with a different reader. A laser system checks the flag each frame, and while it is positive a fire button spawns laser shots. That is where this choice hands off to the next one: the flag is the global condition, and the shots it produces are entities.
 
 ## Choice two: spawn more entities
 
@@ -247,7 +247,7 @@ When a brick with `REWARD` breaks, the break code spawns the pickup falling from
 
 The reason a falling power-up "just falls" is that the systems for motion, spin, and lifetime do not select balls or pickups by name. They select by component, so anything carrying the right components is swept along.
 
-The motion that moves pickups and laser shots is the same loop from part 1, with one filter. Balls are integrated inside the collision substep, so the general motion pass takes everything with a position and velocity *except* the balls, and applies the same slow-motion scale:
+Balls are integrated inside the collision substep from part 1, so everything else that moves needs its own pass. That pass is a sibling of `motion::integrate`: same idea, opposite filter. Where the ball loop matched `RADIUS | VELOCITY | POSITION`, this one takes everything with a position and velocity that is *not* a ball, and applies the slow-motion scale on the way:
 
 ```rust
 game_world
@@ -283,8 +283,8 @@ Walk through what a brand-new power-up costs. Say a "sticky paddle" that catches
 
 Add a `StickyPaddle` variant to `PowerupKind`. Add an arm to `apply_powerup` that sets a `sticky_remaining` timer in `Effects`. Add a tick system that counts it down, the twin of `update_wide_timer`. Read the flag in the one spot in collision where the paddle bounce happens, and when it is set, zero the velocity and pin the ball to the paddle instead of reflecting. Done.
 
-What did not happen is as important as what did. No existing system was rewritten. No class was subclassed, and no base class grew a field that only one subclass uses. The collision system gained one branch behind a flag it already had the habit of reading. The new behavior is data, `sticky_remaining`, plus one small function, plus one conditional. That is the shape every power-up in this post took, whether it lived in a resource, in newly spawned entities, or in components added to a brick.
+What did not happen matters as much as what did. No existing system was rewritten, no class was subclassed, no base class grew a field one subclass uses. The collision system gained a single branch behind a flag it already read. New behavior came out to some data, one small function, and one conditional, the same shape every power-up in this post took, whether the data lived in a resource, in spawned entities, or in components added to a brick.
 
-That is the payoff the clean Breakout in part 1 could not show on its own. The value of modeling a game as data and functions is not that the base game is shorter, it is about the same size either way. The value shows up at the fifth feature, and the tenth, when each addition stays an addition instead of becoming a renovation of a hierarchy that was shaped before you knew what the game needed. Components are the data a thing has, systems are the work done to whatever has the right data, resources are the globals, and a power-up is just more of each.
+That is what the clean base game in part 1 could not demonstrate by itself. Modeling a game this way does not make the base shorter; it keeps each later feature an addition instead of a rewrite of a hierarchy fixed before you knew what the game needed.
 
 If you want to see the storage that all of this sits on, built from nothing, the [Build your own ECS](@/posts/2026-04-07-build-your-own-ecs-archetype-storage.md) series is the companion to this one: that series builds the kernel, this one uses it to make a game.

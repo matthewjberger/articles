@@ -18,9 +18,7 @@ The code here is real, lifted from `breakr`, a Breakout built on [nightshade](ht
 
 ## Why not objects
 
-The object-oriented reflex is to make a `GameObject` base class with a `position`, a virtual `update()`, and a virtual `on_collision()`, then subclass it into `Ball`, `Paddle`, `Brick`, and `Wall`. It reads well on the first day. It models Breakout as a taxonomy of things, and each thing knows how to move and how to react.
-
-The taxonomy is the problem. A wall and a brick are both solid boxes a ball bounces off, but a brick breaks and a wall does not, so `Brick` and `Wall` either share a base that carries a `breakable` flag nobody else uses, or they duplicate the box behavior. The paddle is a solid box too, except it moves under player control and bends the bounce angle. Now you have three classes that are ninety percent the same box and ten percent different, and the differences do not nest into a tree. By the time part 2 introduces a brick that catches fire and a brick that drops a power-up, the hierarchy is fighting you: those are orthogonal traits bolted onto "brick," and inheritance only models one axis at a time.
+The object-oriented reflex is a `GameObject` base class with a `position` and a virtual `update()`, subclassed into `Ball`, `Paddle`, `Brick`, and `Wall`. It models Breakout as a taxonomy, and the taxonomy is the problem. A wall and a brick are both solid boxes, but a brick breaks and a wall does not. The paddle is a solid box too, except it moves and bends the bounce. By the time part 2 adds a brick that catches fire and a brick that drops a power-up, the differences are orthogonal traits bolted onto "brick," and inheritance only models one axis at a time. The [ECS series](@/posts/2026-04-07-build-your-own-ecs-archetype-storage.md) makes the general version of this argument; this post is the concrete one.
 
 The data-oriented answer is to stop asking "what kind of thing is this" and start asking "what data does this thing have." A wall has a position, a size, a color, and a marker that says it is solid. A brick has all of that plus a marker that says it is breakable. A ball has a position, a velocity, and a radius. The thing *is* its components. Behavior is not attached to the thing at all. It lives in functions that select entities by the components they carry.
 
@@ -239,6 +237,8 @@ pub fn step(game_world: &mut GameWorld, world: &mut World) {
     }
 }
 ```
+
+`delta_time` is read straight from the frame timing here. That is the one line part 2 will change: the slow-motion power-up multiplies it by a time scale before it is divided into substeps, and nothing else in this function has to know.
 
 Collision is the longest system in the base game, but its shape is simple. Gather the balls. Gather the solid bodies. For each ball, bounce it off the field walls, then find the deepest box it overlaps and respond to that. The gather step is two queries:
 
