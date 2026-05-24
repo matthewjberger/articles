@@ -1039,7 +1039,7 @@ Per-frame data
 
 New systems. `ui_render_sync_system(world)` walks the laid-out tree and packs `frame.rects` and `frame.texts`. `UiPass::prepare(device, queue, world)` uploads what changed since last frame. `UiPass::execute(encoder, color_view)` records the two draws into a command encoder. Three CPU systems, two GPU calls per frame.
 
-The full file is the snippets from this post assembled together, around 900 lines of Rust plus the two WGSL shaders shown above. It compiles standalone in a fresh Cargo project with `wgpu`, `winit`, `bytemuck`, `freecs`, and `nalgebra_glm` as the only dependencies. `cargo run` opens a window, builds the panel-with-two-buttons UI tree at startup, and runs the layout-interaction-render-sync loop every frame. Hovering over a button visibly tints it lighter. Pressing visibly tints it darker. Clicking fires `UiEvent::Clicked { entity }` to the application's event handler, which the main loop prints.
+The full file is the snippets from this post assembled together, around 900 lines of Rust plus the two WGSL shaders shown above, depending on `wgpu`, `winit`, `bytemuck`, `freecs`, and `nalgebra_glm`. Wired into a window and an event loop, the pass builds the panel-with-two-buttons tree at startup and runs the layout-interaction-render-sync loop each frame: hovering tints a button lighter, pressing tints it darker, clicking fires `UiEvent::Clicked { entity }` to the application. The running version is [nightshade](https://github.com/matthewjberger/nightshade)'s UI; the snippets here are that system reduced to its kernel.
 
 ## Where this stops and where production goes
 

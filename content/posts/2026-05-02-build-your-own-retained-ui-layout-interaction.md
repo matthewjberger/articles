@@ -757,7 +757,7 @@ Part three handles the rendering, which is where most of the GPU-specific work l
 
 ## The full file
 
-The layout system, the interaction system, the picking grid, and the event queue are the snippets above, around 450 lines on top of the part-one file. With them assembled and running, you can move the (still-invisible) cursor over the (still-invisible) buttons, press, release, and watch the event queue collect `UiEvent::Clicked { entity }` entries. Print them in the main loop and the cycle is visible:
+The layout system, the interaction system, the picking grid, and the event queue are the snippets above, around 450 lines on top of part one. Wired into a main loop that feeds them pointer state each frame, they track the (still-invisible) cursor over the (still-invisible) buttons, register press and release, and collect `UiEvent::Clicked { entity }` entries. Printed, the cycle reads:
 
 ```
 [hover] entity Entity { id: 1, generation: 0 }
