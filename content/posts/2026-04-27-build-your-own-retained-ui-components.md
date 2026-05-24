@@ -533,6 +533,6 @@ Part two adds the layout and interaction systems. Walking the tree from roots, r
 
 ## The full file
 
-The component declarations and the builder are around 250 lines of Rust. The standalone form depends on `freecs` and `nalgebra_glm`, drops into the `src/main.rs` of a fresh Cargo project, and runs with `cargo run`. The program builds a panel with two buttons inside it and prints the resulting archetype layout: three entities, two archetypes, with the buttons sharing a table and the panel in its own.
+The full file is the snippets from this post assembled in order: the component structs, the `Rect` helpers, the `UiBuilder`, and the example tree at the end. Around 250 lines. Dropped into the `src/main.rs` of a fresh Cargo project with `freecs` and `nalgebra_glm` as dependencies, `cargo run` builds a panel with two buttons inside it and prints the resulting archetype layout: three entities, two archetypes, with the buttons sharing a table and the panel in its own.
 
 Nothing draws yet. Part two makes the widgets sit where the author intended and react to the mouse. Part three makes them visible.
