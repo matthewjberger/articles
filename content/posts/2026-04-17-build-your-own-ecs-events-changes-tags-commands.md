@@ -13,7 +13,7 @@ series_part = 3
 
 This post adds four pieces. Change detection records what moved so other systems can do incremental work instead of touching everything each frame. Events let one system message another across the schedule without coupling them. Sparse-set tags carry markers that flip too often to live in the archetype mask. Command buffers queue mutations during iteration so the loop does not invalidate itself. A small system schedule at the end runs the four in order.
 
-By the end of the post you have an ECS kernel that closely mirrors what production libraries expose, in about 825 lines of Rust.
+By the end of the post you have an ECS kernel that closely mirrors what production libraries expose.
 
 Start from the file at the end of part 2.
 
@@ -548,20 +548,7 @@ The named entries are for introspection. You can print the system list, find a s
 
 ## What we built
 
-```
-World  (new fields)
-├── current_tick: u32                       stamped on writes
-├── last_tick: u32                          watermark for changed-since checks
-├── collisions: EventQueue<CollisionEvent>  double-buffered messages
-├── players: HashSet<Entity>                sparse-set tag, no archetype touch
-├── enemies: HashSet<Entity>                sparse-set tag
-├── command_buffer: Vec<Command>            deferred structural changes
-└── resources: Resources                    global state, not per-entity
-
-ComponentArrays  (new fields)
-├── positions_changed: Vec<u32>             parallel tick array
-└── velocities_changed: Vec<u32>            parallel tick array
-```
+The `World` grew seven fields: `current_tick` and `last_tick` for change detection, `collisions` for double-buffered events, `players` and `enemies` as sparse-set tags, `command_buffer` for deferred structural changes, and `resources` for global state. Each `ComponentArrays` grew a parallel `_changed: Vec<u32>` tick array per component.
 
 New operations on `World`. `step` to advance the frame, `for_each_mut_changed` to iterate only the slots touched since last step, `send_collision`/`read_collisions`/`drain_collisions` for cross-system messaging, the tag set with `add_player`/`remove_player`/`has_player`/`query_players` (and the same for enemy), the command-buffer methods `queue_spawn`/`queue_despawn`/`queue_set_position`/... and `apply_commands` to flush them, plus direct field access on `world.resources` for global state. A `Schedule` struct that runs systems in order each frame.
 
@@ -583,7 +570,9 @@ We have been doing fan-out by hand for three posts now. Every component type add
 
 Adding a tenth component is editing thirty-something call sites, and any one of them being wrong is a silent correctness bug. This is the reason every production ECS in Rust ships with a macro layer.
 
-[freecs](https://github.com/matthewjberger/freecs) is what these three posts scale to. Same data layout, same archetype graph, same query cache, same watermark change detection. The difference is a single declarative `macro_rules!` macro on top that takes one component declaration and writes the entire fan-out for you. The whole equivalent of what we built collapses to one block.
+[freecs](https://github.com/matthewjberger/freecs) is what these three posts scale to. Same data layout, same archetype graph, same query cache, same watermark change detection. The difference is a single declarative `macro_rules!` macro on top that takes one component declaration and writes the entire fan-out for you.
+
+This is also where the design parts ways with bevy and hecs. Those crates solve the fan-out problem at runtime: a component is registered when first used, stored in a type-erased column, and reached through a `TypeId` lookup and a downcast. That is what lets them accept any user type without code generation, and it costs a layer of dynamic indirection on every access. freecs moves the same work to compile time. Because the macro is handed the complete component set, it can emit a concrete field and a concrete typed accessor per component, so `get_position` is a direct field access with no erasure and no dispatch. The trade is that the component set is fixed when the macro expands rather than open-ended at runtime, which for a single game is the set you already know. The whole equivalent of what we built collapses to one block.
 
 ```rust
 use freecs::{ecs, Entity};

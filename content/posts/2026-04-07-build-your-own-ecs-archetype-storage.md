@@ -12,15 +12,17 @@ series_title = "Build your own ECS"
 
 ECS stands for Entity Component System. An entity is a handle, a small id with no data and no methods. A component is a struct of data attached to an entity, like `Position` or `Velocity`. A system is a function that reads or writes components on the entities that match a query, like "every entity with both Position and Velocity." The data lives in components, the work happens in systems, and entities are the keys that line them up.
 
-The fast layout for an ECS groups entities by which components they have and lays out each component type as its own contiguous `Vec`. A query for "every entity with position and velocity" turns into a tight loop over packed memory rather than a HashMap walk. Mutating a component is a write into a known slot, not a heap indirection. Adding a component is a one-time migration to a different bucket. This is the shape almost every fast Rust ECS uses under the hood, and the next three posts build it from scratch.
+The fast layout for an ECS groups entities by which components they have and lays out each component type as its own contiguous `Vec`. A query for "every entity with position and velocity" turns into a tight loop over packed memory rather than a HashMap walk. Mutating a component is a write into a known slot, not a heap indirection. Adding a component is a one-time migration to a different bucket. This archetype shape is shared with the fast Rust ECS crates, [bevy](https://bevyengine.org/) and [hecs](https://github.com/Ralith/hecs) among them.
 
-End state at part 3 is around 800 lines of straightforward Rust with structural change at runtime, queries, change detection, events, sparse-set tags, deferred command buffers, and a small system schedule. No proc-macros, no `unsafe`, only the standard library.
+Where this build diverges from those crates is what sits on top of the storage. bevy and hecs register component types at runtime and keep each column type-erased, keyed by `TypeId` and downcast on access, which is what lets a library accept any component type a user invents. The version in this series fixes the component set at compile time instead, so every accessor is a concrete typed function over a concrete field: no `TypeId` lookups, no downcasts, no `dyn`, with the component access path statically dispatched end to end. That is the trade a declarative macro buys you once the component set is known up front, and it is the design point freecs occupies that the runtime-registered crates structurally cannot. The next three posts build the storage by hand first, then show the macro that writes the fan-out.
+
+The build is straightforward Rust with structural change at runtime, queries, change detection, events, sparse-set tags, deferred command buffers, and a small system schedule. No proc-macros, no `unsafe`, only the standard library.
 
 Aimed at Rust developers who want to understand how an archetype ECS is shaped, well enough to write one or to read a production crate without guessing. If you want a finished version to drop in rather than build, [freecs](https://github.com/matthewjberger/freecs) is on crates.io and saves you the work.
 
-Part one covers spawn, despawn, and reading and writing components inside a fixed archetype. Runtime structural change is part two. Events, change detection, tags, and command buffers are part three. The complete file (just under 250 lines) sits at the end of this post.
+Part one covers spawn, despawn, and reading and writing components inside a fixed archetype. Runtime structural change is part two. Events, change detection, tags, and command buffers are part three. The complete file sits at the end of this post.
 
-What gets built over the series is the kernel of [freecs](https://github.com/matthewjberger/freecs), my Rust ECS crate. freecs wraps the same data layout in a declarative macro that writes the typed component accessors for you, and it is the foundation of [nightshade](https://github.com/matthewjberger/nightshade), my game engine.
+What gets built over the series is the kernel of [freecs](https://github.com/matthewjberger/freecs), my Rust ECS crate and the foundation of [nightshade](https://github.com/matthewjberger/nightshade), my game engine. The declarative macro that turns this kernel into freecs is the subject of the end of part three.
 
 ## Why this layout
 

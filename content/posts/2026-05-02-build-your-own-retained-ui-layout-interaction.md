@@ -711,22 +711,7 @@ Two systems and one resource per frame. The button is the same six fields it has
 
 ## What we built
 
-```
-World resources  (new)
-├── layout: LayoutState           per-frame cache + dirty flag
-├── pointer: PointerState         cursor and button state
-├── events: Vec<UiEvent>          drained at end of frame
-└── viewport: Vec2                current window size
-
-Systems  (new)
-├── ui_layout_system              builds child cache + places every node
-└── ui_interaction_system         hit tests and updates interactive state
-
-Free helpers
-├── set_position / set_visible / on_viewport_resize  mutators that mark dirty
-├── mark_layout_dirty                                 flag flip
-└── drain_ui_events                                   end-of-frame consumer
-```
+Four new world resources: `layout` (the per-frame cache plus dirty flag), `pointer` (cursor and button state), `events` (drained at end of frame), and `viewport` (current window size). Two systems run over them: `ui_layout_system` builds the child cache and places every node, `ui_interaction_system` hit tests and updates interactive state.
 
 New operations. `set_position(world, entity, pos)`, `set_visible(world, entity, bool)`, and `on_viewport_resize(world, viewport)` mutate the tree and mark the cache dirty. `mark_layout_dirty(world)` is the explicit escape hatch when the application writes through `get_ui_node_mut` directly. `drain_ui_events(world)` is the end-of-frame consumer.
 
