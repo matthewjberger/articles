@@ -32,9 +32,7 @@ The ECS-backed design replaces both. Every widget is an entity. The mix of compo
 
 Adding a new capability is a one-line addition. A `UiTooltip { text: String }` component does not require subclassing anything. Any entity with `UiInteractive + UiTooltip` gets a tooltip. The tooltip-drawing system queries for that combination and draws. Entities without the component pay nothing.
 
-Adding a new system that touches every visible widget (theme color crossfading, focus-ring drawing, change detection for incremental rendering) does not require editing every widget type. It iterates `for_each_mut(UI_NODE, ...)` and is one function.
-
-Group data by how it gets accessed, not by what kind of widget it is. The same shape that worked for `Position + Velocity` in the [archetype ECS](@/posts/2026-04-07-build-your-own-ecs-archetype-storage.md) works for `UiNode + UiColor`.
+Adding a new system that touches every visible widget (theme color crossfading, focus-ring drawing, change detection for incremental rendering) does not require editing every widget type. It iterates `for_each_mut(UI_NODE, ...)` and is one function. This is the same shape that worked for `Position + Velocity` in the [archetype ECS](@/posts/2026-04-07-build-your-own-ecs-archetype-storage.md), applied to widgets.
 
 ## What "retained" actually buys
 
@@ -498,7 +496,7 @@ if let Some(&entity) = registry.names.get("save_button") {
 }
 ```
 
-The registry is plain data the application owns. Production retained UIs grow the registry into a richer structure (string interning, namespacing, accessibility integration). The shape is the same.
+The registry is plain data the application owns.
 
 ## What we built
 
@@ -535,6 +533,6 @@ Part two adds the layout and interaction systems. Walking the tree from roots, r
 
 ## The full file
 
-The component declarations and the builder are around 250 lines of Rust and live as a [gist](https://gist.github.com/matthewjberger/example-retained-ui-part-1). The standalone form depends on `freecs` and `nalgebra_glm`. Run `cargo new retained_ui && cd retained_ui`, add the dependencies, replace `src/main.rs` with the gist contents, then `cargo run`. The program builds a panel with two buttons inside it and prints the resulting archetype layout: three entities, two archetypes, with the buttons sharing a table and the panel in its own.
+The component declarations and the builder are around 250 lines of Rust. The standalone form depends on `freecs` and `nalgebra_glm`, drops into the `src/main.rs` of a fresh Cargo project, and runs with `cargo run`. The program builds a panel with two buttons inside it and prints the resulting archetype layout: three entities, two archetypes, with the buttons sharing a table and the panel in its own.
 
 Nothing draws yet. Part two makes the widgets sit where the author intended and react to the mouse. Part three makes them visible.

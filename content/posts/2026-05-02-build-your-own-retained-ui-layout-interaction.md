@@ -757,7 +757,7 @@ Part three handles the rendering, which is where most of the GPU-specific work l
 
 ## The full file
 
-The layout system, the interaction system, the picking grid, and the event queue are around 450 lines of Rust on top of the part-one file. The combined file lives as a [gist](https://gist.github.com/matthewjberger/example-retained-ui-part-2). Run `cargo run` and you can move the (still-invisible) cursor over the (still-invisible) buttons, press, release, and watch the event queue collect `UiEvent::Clicked { entity }` entries. Print them in the main loop and the cycle is visible:
+The layout system, the interaction system, the picking grid, and the event queue are around 450 lines of Rust on top of the part-one file. Running the combined file, you can move the (still-invisible) cursor over the (still-invisible) buttons, press, release, and watch the event queue collect `UiEvent::Clicked { entity }` entries. Print them in the main loop and the cycle is visible:
 
 ```
 [hover] entity Entity { id: 1, generation: 0 }

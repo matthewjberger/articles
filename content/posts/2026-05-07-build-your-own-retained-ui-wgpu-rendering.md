@@ -43,7 +43,7 @@ struct RectInstance {
 
 Five `vec4<f32>` slots, 80 bytes per rect. `position_size` carries the rect's top-left corner and its width/height (`xy = position`, `zw = size`). `color` is the RGBA fill. `border_color` is the RGBA border. `clip_rect` is the scissor rectangle (`xy = min`, `zw = max`), or all zeros for no clipping. `params` packs four scalars: corner radius, border width, depth, and rotation.
 
-Five vec4s is the bare minimum. Production retained UIs grow this to ten or more vec4s for shadows, gradient effects, character-color overrides, and other features. The shape is the same; each additional capability is another vec4 of parameters that the fragment shader reads when relevant. nightshade's `UiRectInstance` is around twelve vec4s of data once everything is included.
+Five vec4s is the bare minimum. Production retained UIs grow this to ten or more vec4s for shadows, gradient effects, and character-color overrides. The shape is the same; each additional capability is another vec4 of parameters that the fragment shader reads when relevant.
 
 The CPU-side struct that matches the shader.
 
@@ -63,7 +63,7 @@ pub struct RectInstance {
 
 `#[repr(C)]` so the field order is what the shader expects. `Pod + Zeroable` so we can pass `&[RectInstance]` to `bytemuck::cast_slice` to get bytes for `queue.write_buffer`, and so we can call `RectInstance::zeroed()` later when sizing the prev-frame mirror. The total size is `5 * 16 = 80` bytes, which is what wgpu expects.
 
-The `clip_rect` field is mostly zeros for non-clipped rects. We will only pay the four bytes per slot for it; production renderers sometimes split the storage into "rect with clip" and "rect without clip" arrays and pick the right pipeline per draw, but the saving is small and the bookkeeping is significant. We keep one slot.
+The `clip_rect` field is mostly zeros for non-clipped rects. We keep one slot for it rather than splitting the storage into clipped and non-clipped arrays; the per-slot cost is four bytes and the bookkeeping a split would add is not worth it.
 
 ## Walking the tree into an instance vec
 
@@ -175,7 +175,7 @@ fn clip_or_zero(clip: Option<Rect>) -> [f32; 4] {
 
 Three phases. Collect every visible rect into an intermediate vec, releasing every read borrow on `world` before any write. Sort by `z_index` so the painter's algorithm draws lower z first. Take the mutable borrow on `world.resources.ui_frame`, clear last frame's vecs, and translate each entry into a `RectInstance`. The collect step is what keeps the borrow checker happy. `world.query_entities` and `world.get_ui_node` both want `&World`, while `frame` wants `&mut world.resources.ui_frame`, so the read pass and the write pass have to be sequential.
 
-`effective_color` is the interaction-driven color tint. Pressed widgets darken 40%. Hovered widgets brighten 15%. The retained-UI convention is to compute the visible color at submission time, so the render pass sees the final color and the GPU does not need to know anything about hover/pressed. nightshade splits this differently. Per-state colors are stored on the entity in a `UiNodeColor` component with one color per state, and a CPU-side blend system advances the per-state weights and writes the blended result into a `computed_color` field. For a self-contained renderer, computing the tint here is enough.
+`effective_color` is the interaction-driven color tint. Pressed widgets darken 40%. Hovered widgets brighten 15%. The retained-UI convention is to compute the visible color at submission time, so the render pass sees the final color and the GPU does not need to know anything about hover/pressed. A renderer that wants animated transitions stores per-state colors on the entity and blends them toward a target each frame before submission; computing the tint inline here is the static version of the same idea.
 
 `sync_text_instances` does the same job for text. We come back to it after a couple of sections on rect uploads.
 
@@ -672,7 +672,6 @@ const FONT_GLYPHS: &[(char, &str)] = &[
     ('P', "####.\n#...#\n#...#\n####.\n#....\n#....\n#...."),
     ('I', ".###.\n..#..\n..#..\n..#..\n..#..\n..#..\n.###."),
     ('N', "#...#\n##..#\n#.#.#\n#..##\n#...#\n#...#\n#...#"),
-    ('C', ".###.\n#...#\n#....\n#....\n#....\n#...#\n.###."),
     ('!', "..#..\n..#..\n..#..\n..#..\n..#..\n.....\n..#.."),
 ];
 ```
@@ -932,7 +931,7 @@ Centered on `resolved.center()`. The text rendering above uses that center as th
 
 Text needs to draw on top of its rect. The simplest approach: draw all rects first, then all text. The text pass's render-pass attachment uses `LoadOp::Load` so the rects are visible behind it. This works because no UI design ever wants a label hidden behind its own background.
 
-A more sophisticated renderer interleaves rects and text by z-layer (one pipeline switch per layer). nightshade does this. The pass execution has a `layer_draw_groups` array, and for each layer it switches between the rect pipeline and the text pipeline, drawing only the rects and text on that layer. The win is that a tooltip layer can have its background rect *and* its text drawn after a popup layer's background rect *and* its text, instead of all text drawing after all rects globally. For most apps the simpler ordering is enough.
+A more sophisticated renderer interleaves rects and text by z-layer, switching pipelines once per layer so a tooltip's background and text both draw after a popup's background and text, instead of all text drawing after all rects globally. For most apps the simpler ordering is enough.
 
 ## The full execute, including text
 
@@ -1040,13 +1039,13 @@ Per-frame data
 
 New systems. `ui_render_sync_system(world)` walks the laid-out tree and packs `frame.rects` and `frame.texts`. `UiPass::prepare(device, queue, world)` uploads what changed since last frame. `UiPass::execute(encoder, color_view)` records the two draws into a command encoder. Three CPU systems, two GPU calls per frame.
 
-The full file is around 900 lines of Rust plus two short WGSL shaders. It compiles standalone in a fresh Cargo project with `wgpu`, `winit`, `bytemuck`, `freecs`, and `nalgebra_glm` as the only dependencies. The complete sources live as a [gist](https://gist.github.com/matthewjberger/example-retained-ui-part-3). `cargo run` opens a window, builds the panel-with-two-buttons UI tree at startup, and runs the layout-interaction-render-sync loop every frame. Hovering over a button visibly tints it lighter. Pressing visibly tints it darker. Clicking fires `UiEvent::Clicked { entity }` to the application's event handler, which the main loop prints.
+The full file is around 900 lines of Rust plus two short WGSL shaders. It compiles standalone in a fresh Cargo project with `wgpu`, `winit`, `bytemuck`, `freecs`, and `nalgebra_glm` as the only dependencies. `cargo run` opens a window, builds the panel-with-two-buttons UI tree at startup, and runs the layout-interaction-render-sync loop every frame. Hovering over a button visibly tints it lighter. Pressing visibly tints it darker. Clicking fires `UiEvent::Clicked { entity }` to the application's event handler, which the main loop prints.
 
 ## Where this stops and where production goes
 
 Three systems, two shaders, one render pass. Real applications can ship on top of this. A settings panel, a HUD, an inspector all fit. The list of things a production retained UI adds beyond this is long, and most of it is more components and more systems hanging off the same kernel.
 
-nightshade's retained UI is around 30,000 lines of Rust under `crates/nightshade/src/ecs/ui/` and `crates/nightshade/src/render/wgpu/passes/geometry/ui_pass/`. On top of the kernel built here, it has animation (per-state weights for hover/pressed/focused/disabled stored on the entity, advanced toward targets each frame with springs and easing, blended into colors and per-state shadow/transform offsets before submission so the GPU never sees discrete states). It has theming (theme-bound colors that crossfade in OKLab when the active theme changes, with every widget color a role like `ThemeColor::Accent` rather than a literal RGBA, and a theme system that writes the literal each frame). It has composite layouts (flex with wrap, justify-content, gap, basis/grow/shrink, delegated to [taffy](https://crates.io/crates/taffy); grid with explicit columns and row height; solid for aspect-ratio-fitted images). It has glyph-shaped text (kerning, ligatures, RTL, full Unicode coverage, signed-distance-field fonts so glyphs stay crisp at any size, character-level overrides for code editors). It has the picking grid from part two so a UI with thousands of interactive elements still hit-tests in microseconds. It has scroll views and clipping (the `clip` field on `UiNode` actually used). It has sliders, dropdowns, tabs, tree views, virtual lists, modal dialogs, tooltips, drag-and-drop, command palettes, and docking panels, each one a small composition of `UiNode + UiColor + UiText + UiInteractive` plus an optional widget-data component (`UiSliderData { value: f32, min: f32, max: f32 }`) and a per-widget system that consumes interaction events and writes back into the data.
+nightshade's retained UI is around 30,000 lines of Rust on top of the kernel built here. The additions fall into a few buckets: animated state (per-state weights advanced toward targets each frame and blended before submission, so the GPU never sees discrete hover/pressed states), theming (colors bound to roles like `ThemeColor::Accent` that crossfade in OKLab when the theme changes), composite layouts (flex and grid, delegated to [taffy](https://crates.io/crates/taffy)), glyph-shaped text (kerning, RTL, full Unicode, SDF fonts), scroll views that finally use the `clip` field, and the full widget set (sliders, dropdowns, tabs, tree views, modals, drag-and-drop, docking). Each widget is a composition of the same four components plus an optional data component like `UiSliderData { value, min, max }` and a system that consumes its interaction events.
 
 None of those require revisiting parts one or two. Adding a widget type means adding a component and a system. Adding a render effect means adding a branch in the fragment shader. The kernel does not change shape.
 
