@@ -12,9 +12,7 @@ series_title = "Breakout as plain data"
 
 In this Breakout, a thing in the game is the set of components attached to its entity, and nothing more. The ball, a brick, the paddle: each is a few plain data structs sitting in storage. Behavior is not attached to any of them. It lives in free functions that read and write that data, coordinated through a handful of globals. What a thing *does* is decided by which systems match its components.
 
-That is the ECS shape, applied to a game small enough to hold in your head all at once. This post models the base game: the field, the paddle, the bricks, the ball, the bounce, and the win and loss conditions. [Part 2](@/posts/2026-05-22-breakout-as-plain-data-power-ups.md) adds the power-ups, which is where modeling by data actually pays for itself.
-
-The code here is real, taken from a Breakout built on [nightshade](https://github.com/matthewjberger/nightshade). It uses [freecs](https://github.com/matthewjberger/freecs) for the ECS, which is the same kernel the [Build your own ECS](@/posts/2026-04-07-build-your-own-ecs-archetype-storage.md) series builds by hand. None of the modeling depends on those choices. The components are plain structs, the systems are plain functions, and you could carry the whole design to bevy, to hecs, or to an ECS you wrote yourself, with a different renderer underneath. Rendering is left out on purpose. nightshade draws these entities one way; your engine will draw them another. The game logic never names a draw call.
+This post builds the base game: the field, paddle, bricks, ball, the bounce, and the win and loss conditions. [Part 2](@/posts/2026-05-22-breakout-as-plain-data-power-ups.md) adds the power-ups, where modeling by data pays off. The code is real, from a working Breakout, but none of it depends on a particular engine or ECS, the same archetype storage the [Build your own ECS](@/posts/2026-04-07-build-your-own-ecs-archetype-storage.md) series builds by hand. Rendering is left out on purpose: the game logic never names a draw call.
 
 ## Bodies are their data
 
@@ -101,7 +99,7 @@ freecs::ecs! {
 
 Each line names a field, its type, and a bitmask constant. `POSITION`, `SOLID`, and the rest are single-bit flags. The set of components an entity has is the bitwise OR of those flags, and that combined mask is, in effect, the entity's type. A query for "everything solid with a position and a size" is a mask test, not a class check.
 
-In a real engine there is one more component on these entities, a handle linking the game entity to whatever the renderer spawned for it. Here that is an `EngineEntity` bridging into nightshade. It is plumbing, not game design, so it is left out here. The game logic never reads it.
+In a real engine there is one more component on these entities, a handle linking the game entity to whatever the renderer spawned for it. It is plumbing, not game design, so it is left out here. The game logic never reads it.
 
 ## The mask is the type
 
