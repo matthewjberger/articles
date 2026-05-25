@@ -10,9 +10,9 @@ series_title = "Breakout as plain data"
 
 *This is part 2 of 2 of a series.* ← [Components, systems, resources](@/posts/2026-05-17-breakout-as-plain-data-components-systems-resources.md)
 
-[Part 1](@/posts/2026-05-17-breakout-as-plain-data-components-systems-resources.md) built Breakout with no objects. Bodies were masks over shared data, behavior was free functions over queries, and the globals lived in resources. The bricks-and-paddle taxonomy was clean, the kind of thing an inheritance tree handles without complaint, so the design was not really tested.
+[Part 1](@/posts/2026-05-17-breakout-as-plain-data-components-systems-resources.md) built Breakout with no objects. Bodies were masks over shared data, behavior was free functions over queries, and the globals lived in resources. The bricks-and-paddle taxonomy was clean, so the design was not really tested.
 
-Power-ups test it. A multi-ball drop spawns more balls. A wide-paddle pickup changes the paddle for a few seconds and then changes it back. Slow motion alters how time passes for everything. Some bricks catch fire and burn their neighbors. A laser power-up lets the paddle shoot. In an object hierarchy these cut across the categories at every angle, and each one tugs at several classes. Here each one is the same small move, and the move never disturbs what already works.
+Power-ups test it. A multi-ball drop spawns more balls. A wide-paddle pickup changes the paddle for a few seconds and then changes it back. Slow motion alters how time passes for everything. Some bricks catch fire and burn their neighbors. A laser power-up lets the paddle shoot. Each one cuts across the categories at every angle. Here each is the same small move, and the move never disturbs what already works.
 
 There turn out to be three places a power-up can put its data, and the right one depends on what the power-up actually changes. This post walks all three.
 
@@ -196,7 +196,7 @@ The shield and the laser shots work the same way. A shield is a solid body spawn
 
 ## Choice three: add components to an entity that already exists
 
-The third place data can go is onto an entity that is already in the world. Bricks are the example. Most bricks are the plain `SOLID | BREAKABLE` boxes from part 1. But some bricks should drop a power-up when destroyed, and some should catch fire. Those are extra traits on a brick, exactly the orthogonal axes an inheritance tree cannot stack, and here they are two more markers added at spawn time:
+The third place data can go is onto an entity that is already in the world. Bricks are the example. Most bricks are the plain `SOLID | BREAKABLE` boxes from part 1. But some bricks should drop a power-up when destroyed, and some should catch fire. Those are extra, independent traits on a brick, and here they are two more markers added at spawn time:
 
 ```rust
 #[derive(Default, Clone, Copy, Debug)]
@@ -223,7 +223,7 @@ if game_world.resources.rng.unit() < REWARD_CHANCE {
 }
 ```
 
-`add_components` migrates the entity to the archetype that includes the new marker. (The [structural-change post](@/posts/2026-04-12-build-your-own-ecs-structural-change.md) covers what that migration costs and why it is a move between tables rather than an in-place edit.) After it runs, a burning-capable brick that drops a power-up has the mask `SOLID | BREAKABLE | BURNS | REWARD`, and that mask is a complete description of everything it does. No `BurningRewardBrick` class. Just a brick carrying more components.
+`add_components` migrates the entity to the archetype that includes the new marker. (The [structural-change post](@/posts/2026-04-12-build-your-own-ecs-structural-change.md) covers what that migration costs and why it is a move between tables rather than an in-place edit.) After it runs, a burning-capable brick that drops a power-up has the mask `SOLID | BREAKABLE | BURNS | REWARD`, and that mask is a complete description of everything it does. It is still just a brick, carrying more components.
 
 The collision system reads these the same way it read `BREAKABLE` and `PLAYER_CONTROLLED` in part 1, straight off the mask, and decides what to emit:
 
@@ -283,8 +283,8 @@ Walk through what a brand-new power-up costs. Say a "sticky paddle" that catches
 
 Add a `StickyPaddle` variant to `PowerupKind`. Add an arm to `apply_powerup` that sets a `sticky_remaining` timer in `Effects`. Add a tick system that counts it down, the twin of `update_wide_timer`. Read the flag in the one spot in collision where the paddle bounce happens, and when it is set, zero the velocity and pin the ball to the paddle instead of reflecting. Done.
 
-What did not happen matters as much as what did. No existing system was rewritten, no class was subclassed, no base class grew a field one subclass uses. The collision system gained a single branch behind a flag it already read. New behavior came out to some data, one small function, and one conditional, the same shape every power-up in this post took, whether the data lived in a resource, in spawned entities, or in components added to a brick.
+What did not happen matters as much as what did. No existing system was rewritten. The collision system gained a single branch behind a flag it already read. New behavior came out to some data, one small function, and one conditional, the same shape every power-up in this post took, whether the data lived in a resource, in spawned entities, or in components added to a brick.
 
-That is what the clean base game in part 1 could not demonstrate by itself. Modeling a game this way does not make the base shorter; it keeps each later feature an addition instead of a rewrite of a hierarchy fixed before you knew what the game needed.
+That is what the clean base game in part 1 could not demonstrate by itself. Modeling a game this way does not make the base shorter; it keeps each later feature an addition instead of a rewrite of decisions fixed before you knew what the game needed.
 
 If you want to see the storage that all of this sits on, built from nothing, the [Build your own ECS](@/posts/2026-04-07-build-your-own-ecs-archetype-storage.md) series is the companion to this one: that series builds the kernel, this one uses it to make a game.

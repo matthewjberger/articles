@@ -10,17 +10,17 @@ series_title = "Breakout as plain data"
 
 *This is part 1 of 2 of a series.* Next → [Power-ups as data](@/posts/2026-05-22-breakout-as-plain-data-power-ups.md)
 
-There is no `GameObject` in this Breakout. The ball does not own an `update()`. A brick is not a subclass of anything. The paddle has no methods. What exists instead is data, functions that read and write that data, and a small set of globals. A thing in the game is nothing more than the set of components attached to its entity, and what a thing *does* is decided by which systems happen to match it.
+In this Breakout, a thing in the game is the set of components attached to its entity, and nothing more. The ball, a brick, the paddle: each is a few plain data structs sitting in storage. Behavior is not attached to any of them. It lives in free functions that read and write that data, coordinated through a handful of globals. What a thing *does* is decided by which systems match its components.
 
-That is the ECS shape, applied to a game small enough to hold in your head all at once. This post models the base game: the field, the paddle, the bricks, the ball, the bounce, and the win and loss conditions. [Part 2](@/posts/2026-05-22-breakout-as-plain-data-power-ups.md) adds the power-ups, which is where modeling by data instead of by class hierarchy actually pays for itself.
+That is the ECS shape, applied to a game small enough to hold in your head all at once. This post models the base game: the field, the paddle, the bricks, the ball, the bounce, and the win and loss conditions. [Part 2](@/posts/2026-05-22-breakout-as-plain-data-power-ups.md) adds the power-ups, which is where modeling by data actually pays for itself.
 
-The code here is real, lifted from `breakr`, a Breakout built on [nightshade](https://github.com/matthewjberger/nightshade). It uses [freecs](https://github.com/matthewjberger/freecs) for the ECS, which is the same kernel the [Build your own ECS](@/posts/2026-04-07-build-your-own-ecs-archetype-storage.md) series builds by hand. None of the modeling depends on those choices. The components are plain structs, the systems are plain functions, and you could carry the whole design to bevy, to hecs, or to an ECS you wrote yourself, with a different renderer underneath. Rendering is left out on purpose. nightshade draws these entities one way; your engine will draw them another. The game logic never names a draw call.
+The code here is real, taken from a Breakout built on [nightshade](https://github.com/matthewjberger/nightshade). It uses [freecs](https://github.com/matthewjberger/freecs) for the ECS, which is the same kernel the [Build your own ECS](@/posts/2026-04-07-build-your-own-ecs-archetype-storage.md) series builds by hand. None of the modeling depends on those choices. The components are plain structs, the systems are plain functions, and you could carry the whole design to bevy, to hecs, or to an ECS you wrote yourself, with a different renderer underneath. Rendering is left out on purpose. nightshade draws these entities one way; your engine will draw them another. The game logic never names a draw call.
 
-## Why not objects
+## Bodies are their data
 
-The object-oriented reflex is a `GameObject` base class with a `position` and a virtual `update()`, subclassed into `Ball`, `Paddle`, `Brick`, and `Wall`. It models Breakout as a taxonomy, and the taxonomy is the problem. A wall and a brick are both solid boxes, but a brick breaks and a wall does not. The paddle is a solid box too, except it moves and bends the bounce. By the time part 2 adds a brick that catches fire and a brick that drops a power-up, the differences are orthogonal traits bolted onto "brick," and inheritance only models one axis at a time. The [ECS series](@/posts/2026-04-07-build-your-own-ecs-archetype-storage.md) makes the general version of this argument; this post is the concrete one.
+Every body in the game is described by the data it carries, not by a type it belongs to. A wall has a position, a size, a color, and a marker that says it is solid. A brick has all of that plus a marker that says it is breakable. A ball has a position, a velocity, and a radius. The thing *is* its components, and behavior is not attached to it at all. It lives in functions that select entities by the components they carry.
 
-The data-oriented answer is to stop asking "what kind of thing is this" and start asking "what data does this thing have." A wall has a position, a size, a color, and a marker that says it is solid. A brick has all of that plus a marker that says it is breakable. A ball has a position, a velocity, and a radius. The thing *is* its components. Behavior is not attached to the thing at all. It lives in functions that select entities by the components they carry.
+The shape this replaces is a class per body: a `GameObject` with a `position` and a virtual `update()`, subclassed into `Ball`, `Paddle`, `Brick`, and `Wall`. That holds up while the bodies form a clean taxonomy, and it strains once their traits go orthogonal. By the time part 2 adds a brick that catches fire and a brick that drops a power-up, those are independent traits stacked onto "brick," and a single inheritance chain can model only one axis at a time. The [ECS series](@/posts/2026-04-07-build-your-own-ecs-archetype-storage.md) makes the general version of this argument; this post is the concrete one.
 
 ## Components are data, and only data
 
@@ -101,7 +101,7 @@ freecs::ecs! {
 
 Each line names a field, its type, and a bitmask constant. `POSITION`, `SOLID`, and the rest are single-bit flags. The set of components an entity has is the bitwise OR of those flags, and that combined mask is, in effect, the entity's type. A query for "everything solid with a position and a size" is a mask test, not a class check.
 
-In a real engine there is one more component on these entities, a handle linking the game entity to whatever the renderer spawned for it. In `breakr` that is an `EngineEntity` bridging into nightshade. It is plumbing, not game design, so it is left out here. The game logic never reads it.
+In a real engine there is one more component on these entities, a handle linking the game entity to whatever the renderer spawned for it. Here that is an `EngineEntity` bridging into nightshade. It is plumbing, not game design, so it is left out here. The game logic never reads it.
 
 ## The mask is the type
 
@@ -151,7 +151,7 @@ let paddle = spawn_rectangle(
 | Brick  | `SOLID \| BREAKABLE`              | the ball bounces and the brick is destroyed |
 | Paddle | `SOLID \| PLAYER_CONTROLLED`      | the ball bounces and input moves it        |
 
-There is no `Wall` type, no `Brick` type, no `Paddle` type. There is `spawn_rectangle` and a mask. Adding a kind of body later, a bumper that adds score without breaking, an indestructible steel brick, is a new combination of existing markers (plus maybe one new marker), not a new branch in a hierarchy.
+There is no `Wall` type, no `Brick` type, no `Paddle` type. There is `spawn_rectangle` and a mask. Adding a kind of body later, a bumper that adds score without breaking, an indestructible steel brick, is a new combination of existing markers, plus maybe one new marker.
 
 The ball is the one body that is genuinely different data, a circle that moves, so it gets its own helper and its own mask:
 
@@ -426,6 +426,6 @@ The win check is a query. `bricks_remaining == 0` says the field is clear. The l
 
 ## What part 1 leaves you
 
-A complete game, modeled without a single class hierarchy. Bodies are masks over shared data. Behavior is six or seven functions that select entities by component and read or write their fields. The globals, score, lives, phase, the play field, sit in resources. Systems coordinate through an event queue rather than through references to one another.
+A complete game built from plain data structs and free functions. Bodies are masks over shared data. Behavior is six or seven functions that select entities by component and read or write their fields. The globals, score, lives, phase, the play field, sit in resources. Systems coordinate through an event queue rather than through references to one another.
 
-The design has not yet been stressed. Breakout's bricks and paddle are a clean taxonomy, the kind of problem inheritance handles fine on a good day. [Part 2](@/posts/2026-05-22-breakout-as-plain-data-power-ups.md) adds power-ups, a multi-ball drop, a paddle that widens for a while, a slow-motion field, bricks that catch fire, lasers. Each one cuts across the neat categories, and each one turns out to be the same move: a little more data, one more small system, and nothing already written has to change.
+The design has not yet been stressed. Breakout's bricks and paddle form a clean taxonomy, simple enough that the modeling choice barely matters. [Part 2](@/posts/2026-05-22-breakout-as-plain-data-power-ups.md) adds power-ups, a multi-ball drop, a paddle that widens for a while, a slow-motion field, bricks that catch fire, lasers. Each one cuts across the neat categories, and each one turns out to be the same move: a little more data, one more small system, and nothing already written has to change.
