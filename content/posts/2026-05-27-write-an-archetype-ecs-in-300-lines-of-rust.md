@@ -5,8 +5,6 @@ categories = ["rust"]
 excerpt = "An archetype ECS built from nothing: generational handles, struct-of-arrays tables, runtime component migration, and two caches. Then the engine layer on top. No proc-macros, no unsafe, std only."
 +++
 
-An ECS stores state as entities (handles), components (plain data), and systems (functions over entities with a given component set). This builds an archetype version in about 300 lines, no proc-macros, no `unsafe`, std only. Code first, then the why. The assembled files are the [kernel gist](https://gist.github.com/matthewjberger/ff6fc2aba33d94330fdadbbb99d45563) and the [full gist](https://gist.github.com/matthewjberger/d4c11ec250cfd1a8d761f54cb0ae51f4).
-
 ```rust
 #[derive(Default, Clone, Debug)]
 struct Position { x: f32, y: f32 }
