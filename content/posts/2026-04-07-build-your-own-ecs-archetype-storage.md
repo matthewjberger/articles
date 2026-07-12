@@ -104,7 +104,7 @@ assert_eq!(recycled.id, first.id);
 assert_eq!(recycled.generation, 1);
 ```
 
-The allocator does not know whether a handle is currently valid. That bookkeeping lives elsewhere. Its job is to mint id-and-generation pairs that are unique over the lifetime of the program.
+The allocator does not know whether a handle is currently valid. In this build that bookkeeping lives in the location map, and `despawn` checks it before ever calling `deallocate`, which is what makes a double free impossible here. Worth knowing before lifting this design into something bigger. `deallocate` trusts its caller, and calling it twice with the same handle would push the id onto the freelist twice, eventually minting two live entities that share an id and a generation. freecs hit exactly that in its multi-world mode, where no single location map sees every entity, and version 3.0 moved liveness into the allocator itself, a slot per id holding the current generation and an alive flag, with `deallocate` refusing stale or repeated frees. For a single world the location check is enough, and the allocator's only job is to mint id-and-generation pairs that are unique over the lifetime of the program.
 
 ## Components are just structs
 

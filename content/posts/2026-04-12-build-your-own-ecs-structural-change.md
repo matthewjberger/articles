@@ -599,7 +599,7 @@ impl World {
 }
 ```
 
-The `.to_vec()` copy is needed because `cached_tables` borrows the cache mutably (to fill it on miss) and then we want to borrow `self.tables` mutably to call `f`. A handful of `usize` copied to the stack is cheap.
+The `.to_vec()` copy is needed because `cached_tables` borrows the cache mutably (to fill it on miss) and then we want to borrow `self.tables` mutably to call `f`. A handful of `usize` copied to the stack is cheap. It is also avoidable. Turn the query walk into a free function that takes `&mut` the cache and `&mut` the tables as two separate parameters and the borrows become disjoint, so the cached slice can stay borrowed while the tables are mutated. freecs 3.0 does that and the copy disappears from every query path. The method form reads better in a tutorial, so this build keeps it and pays the copy.
 
 The read-only `for_each` does not have the borrow problem, but it also cannot fill the cache, because the cache write requires `&mut self`. A fuller implementation would either expose a `warm_query(mask)` method that fills the cache eagerly during setup, or use a `RefCell` inside the cache so the read-only path can still write. The warm-up route is what production crates usually take because it avoids interior mutability on the hot read path. For this post the read-only path scans the tables every time.
 

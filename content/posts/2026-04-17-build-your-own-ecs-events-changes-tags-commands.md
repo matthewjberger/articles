@@ -2,7 +2,7 @@
 title = "Build your own ECS (part 3), change detection, events, tags, and commands"
 tags = ["rust", "ecs", "game-engine", "tutorial"]
 categories = ["rust"]
-excerpt = "The four subsystems that turn the storage layer into something a real game engine can sit on top of. A watermark-based change detector, double-buffered events, sparse-set tags, and a deferred command buffer."
+excerpt = "The four subsystems that turn the storage layer into something a real game engine can sit on top of. A watermark-based change detector, sequence-numbered event channels, sparse-set tags, and a deferred command buffer."
 series = "ecs"
 series_part = 3
 +++
@@ -66,7 +66,7 @@ impl World {
 
 After `step()`, `last_tick` is what `current_tick` was a moment ago, and `current_tick` is one higher. Slots stamped during the just-finished frame have ticks `== last_tick`, which fails the `> last_tick` check, so they no longer count as changed. Slots modified in the new frame will get the new `current_tick`, which is `> last_tick`, so they will. No clearing.
 
-The `wrapping_add` here is a corner this design papers over. After `2^32` frames the tick rolls back to zero, and a slot stamped at the old `u32::MAX` suddenly looks ancient when `last_tick` is also `u32::MAX`. At 60 frames per second that is about 2.3 years of continuous runtime, fine for a game and not fine for a long-running server. A production engine either widens the tick to `u64` or runs a periodic rebasing pass that subtracts the watermark from every stamp.
+The `wrapping_add` here is a corner this design papers over. After `2^32` frames the tick rolls back to zero, and a slot stamped at the old `u32::MAX` suddenly looks ancient when `last_tick` is also `u32::MAX`. At 60 frames per second that is about 2.3 years of continuous runtime, fine for a game and not fine for a long-running server. A production engine widens the tick to `u64`, rebases the stamps periodically, or compares ticks with wrapping subtraction and a sign check so the ordering survives the rollover. freecs does the last of these.
 
 Every place that pushes to a component vec also needs to push to its `_changed` vec, and every place that modifies an existing slot needs to stamp the current tick. Spawn first.
 
@@ -178,57 +178,79 @@ A slot is considered changed if *any* of the queried components have a tick newe
 
 A collision system finds two entities that overlap and the damage system needs to know. Calling damage methods from inside the collision loop couples the two together. Scribbling a pending-damage component on one of the entities works for one-off cases and turns into a mess when ten systems want to broadcast. The clean shape is a queue. The collision system writes `CollisionEvent`s without naming a receiver. The damage system reads them without naming a sender.
 
-The tricky part is lifetime. The queue cannot empty itself the moment an event is written because a system reading later in the same frame would miss it. It cannot keep events forever because nothing would ever drain. The compromise here is a two-frame rule. An event sent on frame N is readable through the end of frame N+1 and gone by the start of frame N+2. Every system gets a full frame to react regardless of schedule order, and memory is bounded at twice the per-frame volume.
+The tricky part is lifetime. The queue cannot empty itself the moment an event is written because a system reading later in the same frame would miss it. It cannot keep events forever because nothing would ever drain. The classic answer is double buffering, two vecs swapped once per frame, so an event survives into the next frame and disappears after. It works, and an earlier version of this kernel shipped exactly that, but it gives every reader the same view. Two systems that both want to consume the queue cannot each see every event exactly once. One drains and the other starves, or both read and both see duplicates across the frame boundary.
 
-Implementation, double-buffered.
+Sequence numbers fix that and need less machinery. Events live in one flat vec. Every event has a monotonically increasing sequence number, implicitly, by position. The channel remembers `base_sequence`, the count of events already dropped off the front, so the event at index `i` has sequence `base_sequence + i + 1`. A reader owns a cursor, the sequence it has consumed through. Reading is slicing from the cursor forward. After reading, the reader records the current head as its new cursor.
 
 ```rust
 #[derive(Clone)]
-pub struct EventQueue<T> {
-    pub current: Vec<T>,
-    pub previous: Vec<T>,
+pub struct EventChannel<T> {
+    pub events: Vec<T>,
+    pub base_sequence: u64,
+    pub previous_update_sequence: u64,
 }
 
-impl<T> Default for EventQueue<T> {
+impl<T> Default for EventChannel<T> {
     fn default() -> Self {
         Self {
-            current: Vec::new(),
-            previous: Vec::new(),
+            events: Vec::new(),
+            base_sequence: 0,
+            previous_update_sequence: 0,
         }
     }
 }
 
-impl<T> EventQueue<T> {
+impl<T> EventChannel<T> {
     pub fn send(&mut self, event: T) {
-        self.current.push(event);
+        self.events.push(event);
+    }
+
+    pub fn sequence(&self) -> u64 {
+        self.base_sequence + self.events.len() as u64
+    }
+
+    pub fn events_since(&self, cursor: u64) -> &[T] {
+        let start = cursor
+            .saturating_sub(self.base_sequence)
+            .min(self.events.len() as u64) as usize;
+        &self.events[start..]
     }
 
     pub fn read(&self) -> impl Iterator<Item = &T> {
-        self.previous.iter().chain(self.current.iter())
+        self.events.iter()
     }
 
-    pub fn drain(&mut self) -> impl Iterator<Item = T> + '_ {
-        self.previous.drain(..).chain(self.current.drain(..))
+    pub fn trim(&mut self, up_to_sequence: u64) {
+        let drop_count = up_to_sequence
+            .saturating_sub(self.base_sequence)
+            .min(self.events.len() as u64) as usize;
+        self.events.drain(..drop_count);
+        self.base_sequence += drop_count as u64;
     }
 
     pub fn update(&mut self) {
-        self.previous.clear();
-        std::mem::swap(&mut self.current, &mut self.previous);
+        let expire = self.previous_update_sequence;
+        self.trim(expire);
+        self.previous_update_sequence = self.sequence();
     }
 
     pub fn len(&self) -> usize {
-        self.current.len() + self.previous.len()
+        self.events.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.current.is_empty() && self.previous.is_empty()
+        self.events.is_empty()
     }
 }
 ```
 
-`send` pushes into the current buffer. `read` yields everything in both buffers (previous first, then current, the order events were sent). `update` clears the previous buffer and swaps the current into its place, so the next call starts with `previous` holding what was just sent and `current` empty. Two `update` calls between a `send` and a `read` will lose the event.
+The manual `Default` impl exists because deriving it would demand `T: Default`, and event types have no reason to carry that bound.
 
-Each event type gets its own queue, stored as a field on the `World`.
+`send` pushes. `sequence` reports the head. `events_since(cursor)` returns the slice of everything newer than the cursor, clamped at both ends, so a reader that has fallen behind the buffer gets whatever is still there instead of a panic. `trim` drops consumed events off the front and advances `base_sequence`, which is what keeps sequence numbers stable under a reader while memory gets reclaimed.
+
+`update` is the frame hook, and it is where the two-frame rule survives. The channel remembers where the head was at the previous `update` and trims to that point. An event sent during frame N is untouched by the update that ends frame N, because the remembered head predates it, and is dropped by the update that ends frame N+1. Readers that do not track cursors just call `read` or `len` and see everything still buffered, exactly the view the old double buffer gave them.
+
+Each event type gets its own channel, stored as a field on the `World`.
 
 ```rust
 #[derive(Debug, Clone)]
@@ -247,7 +269,7 @@ pub struct World {
     pub query_cache: HashMap<u64, Vec<usize>>,
     pub current_tick: u32,
     pub last_tick: u32,
-    pub collisions: EventQueue<CollisionEvent>,
+    pub collisions: EventChannel<CollisionEvent>,
 }
 
 impl World {
@@ -259,15 +281,21 @@ impl World {
         self.collisions.read()
     }
 
-    pub fn drain_collisions(&mut self) -> impl Iterator<Item = CollisionEvent> + '_ {
-        self.collisions.drain()
+    pub fn read_collisions_since(&self, cursor: u64) -> &[CollisionEvent] {
+        self.collisions.events_since(cursor)
+    }
+
+    pub fn collision_sequence(&self) -> u64 {
+        self.collisions.sequence()
     }
 }
 ```
 
 The familiar fan-out. One set of methods per event type, hand-written here. A macro would generate them. The cost is the same as for component accessors.
 
-`step()` advances each event queue. It is the same `step()` that advances the tick.
+A consumer's cursor has to live somewhere across frames, and a system is a plain function with no state of its own. The natural home in this design is the `Resources` struct introduced later in this post. The demo keeps `world.resources.collision_cursor` and its reporter system reads everything since the cursor, prints it, then records the new head. Two consumers keep two cursors and each sees each event exactly once. A consumer that skips a frame catches up from wherever its cursor points, provided it reads before the two-frame expiry claims the events.
+
+`step()` advances each channel. It is the same `step()` that advances the tick.
 
 ```rust
 impl World {
@@ -281,11 +309,85 @@ impl World {
 
 The order is intentional. Update events first, then advance the tick. By the time the new frame begins, both have rolled over.
 
+One production note. A channel that nobody reads or trims grows without bound. freecs caps the buffer and drops the oldest half when a send finds it full, a backstop the kernel here leaves out to keep the shape visible.
+
 ## Sparse-set tags
 
-A tag is a `HashSet<Entity>`. Insert, remove, and membership check are all O(1). Iteration over "all entities with this tag" yields directly from the set. The reason a tag is a hash set instead of a bit in the archetype mask is the migration cost. A bit in the mask means flipping the tag triggers `move_entity`, which pulls every other component off the entity, pushes them into a new table, and compacts the old slot. For markers that flip often (the "selected" tag in an RTS, a frame-local "took damage this frame" flag, an enemy alertness state), the migration is pure waste compared to a hash insert.
+A tag is a membership set with three operations that all need to be O(1), insert, remove, and "does this entity carry it". The reason a tag lives outside the archetype mask is the migration cost. A bit in the mask means flipping the tag triggers `move_entity`, which pulls every other component off the entity, pushes them into a new table, and compacts the old slot. For markers that flip often (the "selected" tag in an RTS, a frame-local "took damage this frame" flag, an enemy alertness state), the migration is pure waste next to a set insert.
 
-The masking approach is not wrong for tags that rarely change. `Player` and `Enemy` are reasonable as archetype bits if those identities are set once at spawn and never updated. The reason this kernel puts them in a `HashSet` anyway is uniformity. Code that wants to ask "is this entity a player" should not need to know whether the answer comes from a mask check or a hash lookup.
+The masking approach is not wrong for tags that rarely change. `Player` and `Enemy` are reasonable as archetype bits if those identities are set once at spawn and never updated. The reason this kernel puts them in a side structure anyway is uniformity. Code that wants to ask "is this entity a player" should not need to know whether the answer comes from a mask check or a set lookup.
+
+The structure that earns the section its name is a sparse set, two arrays that point into each other. `dense` is the packed list of entities carrying the tag, in insertion order, so iterating members walks contiguous memory. `sparse` is indexed by entity id and holds that id's position in `dense`, or a sentinel meaning absent. Membership is two array reads. Insert appends to `dense` and records the position. Remove swap-removes from `dense` and patches the `sparse` entry of whichever entity got moved into the hole, the same trick `despawn` plays on the component vecs.
+
+```rust
+const TAG_ABSENT: u32 = u32::MAX;
+
+#[derive(Default, Clone)]
+pub struct SparseTagSet {
+    pub dense: Vec<Entity>,
+    pub sparse: Vec<u32>,
+}
+
+impl SparseTagSet {
+    pub fn insert(&mut self, entity: Entity) -> bool {
+        let index = entity.id as usize;
+        if index >= self.sparse.len() {
+            self.sparse.resize(index + 1, TAG_ABSENT);
+        }
+        let slot = self.sparse[index];
+        if slot != TAG_ABSENT {
+            let existing = &mut self.dense[slot as usize];
+            if *existing == entity {
+                return false;
+            }
+            *existing = entity;
+            return true;
+        }
+        self.sparse[index] = self.dense.len() as u32;
+        self.dense.push(entity);
+        true
+    }
+
+    pub fn remove(&mut self, entity: Entity) -> bool {
+        let index = entity.id as usize;
+        let Some(&slot) = self.sparse.get(index) else {
+            return false;
+        };
+        if slot == TAG_ABSENT || self.dense[slot as usize] != entity {
+            return false;
+        }
+        self.dense.swap_remove(slot as usize);
+        self.sparse[index] = TAG_ABSENT;
+        if (slot as usize) < self.dense.len() {
+            let moved = self.dense[slot as usize];
+            self.sparse[moved.id as usize] = slot;
+        }
+        true
+    }
+
+    pub fn contains(&self, entity: Entity) -> bool {
+        self.sparse
+            .get(entity.id as usize)
+            .is_some_and(|&slot| slot != TAG_ABSENT && self.dense[slot as usize] == entity)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = Entity> + '_ {
+        self.dense.iter().copied()
+    }
+
+    pub fn len(&self) -> usize {
+        self.dense.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.dense.is_empty()
+    }
+}
+```
+
+Storing the whole `Entity` in `dense` rather than the bare id makes membership generation-checked for free. A stale handle whose id was recycled compares unequal against the stored entity, so `contains` answers false, the same fail-closed behavior the location map gives component access. `insert` overwrites a stale entry for the same id instead of growing, which lets a recycled entity take over its predecessor's slot cleanly.
+
+A `HashSet<Entity>` would give the same external API in three lines and is a fine stand-in while prototyping. The sparse set buys membership checks that are array probes with no hashing, iteration over members that is a dense contiguous walk, and a deterministic iteration order. Determinism starts to matter the moment replays or lockstep networking show up, because a hash set yields its members in whatever order the hasher seeded that particular run.
 
 ```rust
 #[derive(Default)]
@@ -298,9 +400,9 @@ pub struct World {
     pub query_cache: HashMap<u64, Vec<usize>>,
     pub current_tick: u32,
     pub last_tick: u32,
-    pub collisions: EventQueue<CollisionEvent>,
-    pub players: std::collections::HashSet<Entity>,
-    pub enemies: std::collections::HashSet<Entity>,
+    pub collisions: EventChannel<CollisionEvent>,
+    pub players: SparseTagSet,
+    pub enemies: SparseTagSet,
 }
 
 impl World {
@@ -311,15 +413,15 @@ impl World {
     }
 
     pub fn remove_player(&mut self, entity: Entity) -> bool {
-        self.players.remove(&entity)
+        self.players.remove(entity)
     }
 
     pub fn has_player(&self, entity: Entity) -> bool {
-        self.players.contains(&entity)
+        self.players.contains(entity)
     }
 
     pub fn query_players(&self) -> impl Iterator<Item = Entity> + '_ {
-        self.players.iter().copied()
+        self.players.iter()
     }
 
     pub fn add_enemy(&mut self, entity: Entity) {
@@ -329,29 +431,27 @@ impl World {
     }
 
     pub fn remove_enemy(&mut self, entity: Entity) -> bool {
-        self.enemies.remove(&entity)
+        self.enemies.remove(entity)
     }
 
     pub fn has_enemy(&self, entity: Entity) -> bool {
-        self.enemies.contains(&entity)
+        self.enemies.contains(entity)
     }
 
     pub fn query_enemies(&self) -> impl Iterator<Item = Entity> + '_ {
-        self.enemies.iter().copied()
+        self.enemies.iter()
     }
 }
 ```
 
-Insertion and removal are O(1) hash operations with no archetype touch. Querying "all players" yields directly from the set. Combined queries (a `for_each` over `POSITION | VELOCITY` plus a `has_player` filter) walk the tables and check the tag set per entity, which is a cheap hash lookup.
+Insertion and removal never touch the archetype storage. Querying "all players" yields straight out of `dense`. Combined queries (a `for_each` over `POSITION | VELOCITY` plus a `has_player` filter) walk the tables and check the tag set per entity, two array reads each.
 
-`despawn` needs to clear the entity out of every tag set, otherwise stale entity handles will accumulate in the sets. Add these lines to the existing `despawn`.
+`despawn` needs to clear the entity out of every tag set, otherwise stale entries pile up in `dense`. Add these lines to the existing `despawn`.
 
 ```rust
-self.players.remove(&entity);
-self.enemies.remove(&entity);
+self.players.remove(entity);
+self.enemies.remove(entity);
 ```
-
-The name "sparse set" comes from the data structure traditionally used here. An array of slot pointers indexed by entity id (so checking membership is an array access), plus a packed list of present entities (so iteration is dense). A `HashSet` is the simplified version. For a real engine with millions of entities and many tag types, the sparse-set proper is faster, but it has the same external API.
 
 ## Command buffers
 
@@ -389,9 +489,9 @@ pub struct World {
     pub query_cache: HashMap<u64, Vec<usize>>,
     pub current_tick: u32,
     pub last_tick: u32,
-    pub collisions: EventQueue<CollisionEvent>,
-    pub players: std::collections::HashSet<Entity>,
-    pub enemies: std::collections::HashSet<Entity>,
+    pub collisions: EventChannel<CollisionEvent>,
+    pub players: SparseTagSet,
+    pub enemies: SparseTagSet,
     pub command_buffer: Vec<Command>,
 }
 
@@ -493,6 +593,7 @@ Some state belongs to the world, not to any specific entity. Delta time. The inp
 pub struct Resources {
     pub delta_time: f32,
     pub game_time: f32,
+    pub collision_cursor: u64,
 }
 
 #[derive(Default)]
@@ -505,15 +606,15 @@ pub struct World {
     pub query_cache: HashMap<u64, Vec<usize>>,
     pub current_tick: u32,
     pub last_tick: u32,
-    pub collisions: EventQueue<CollisionEvent>,
-    pub players: HashSet<Entity>,
-    pub enemies: HashSet<Entity>,
+    pub collisions: EventChannel<CollisionEvent>,
+    pub players: SparseTagSet,
+    pub enemies: SparseTagSet,
     pub command_buffer: Vec<Command>,
     pub resources: Resources,
 }
 ```
 
-A system reads from resources by accessing `world.resources.delta_time` and writes by assigning to `world.resources.game_time = ...`. No accessor functions, no per-resource fan-out. The freecs macro shown later in the post generates the same shape from a `Resources { delta_time: f32 }` block at the macro site. We are building the hand-written equivalent.
+A system reads from resources by accessing `world.resources.delta_time` and writes by assigning to `world.resources.game_time = ...`. No accessor functions, no per-resource fan-out. This is also where the event cursor from the events section lives, `collision_cursor`, cross-frame reader state with no better owner. The freecs macro shown later in the post generates the same shape from a `Resources { delta_time: f32 }` block at the macro site. We are building the hand-written equivalent.
 
 ## A trivial schedule
 
@@ -548,9 +649,9 @@ The named entries are for introspection. You can print the system list, find a s
 
 ## What we built
 
-The `World` grew seven fields: `current_tick` and `last_tick` for change detection, `collisions` for double-buffered events, `players` and `enemies` as sparse-set tags, `command_buffer` for deferred structural changes, and `resources` for global state. Each `ComponentArrays` grew a parallel `_changed: Vec<u32>` tick array per component.
+The `World` grew seven fields: `current_tick` and `last_tick` for change detection, `collisions` as a sequence-numbered event channel, `players` and `enemies` as sparse-set tags, `command_buffer` for deferred structural changes, and `resources` for global state. Each `ComponentArrays` grew a parallel `_changed: Vec<u32>` tick array per component.
 
-New operations on `World`. `step` to advance the frame, `for_each_mut_changed` to iterate only the slots touched since last step, `send_collision`/`read_collisions`/`drain_collisions` for cross-system messaging, the tag set with `add_player`/`remove_player`/`has_player`/`query_players` (and the same for enemy), the command-buffer methods `queue_spawn`/`queue_despawn`/`queue_set_position`/... and `apply_commands` to flush them, plus direct field access on `world.resources` for global state. A `Schedule` struct that runs systems in order each frame.
+New operations on `World`. `step` to advance the frame, `for_each_mut_changed` to iterate only the slots touched since last step, `send_collision`, `read_collisions`, and the cursor pair `read_collisions_since` and `collision_sequence` for cross-system messaging, the tag set with `add_player`/`remove_player`/`has_player`/`query_players` (and the same for enemy), the command-buffer methods `queue_spawn`/`queue_despawn`/`queue_set_position`/... and `apply_commands` to flush them, plus direct field access on `world.resources` for global state. A `Schedule` struct that runs systems in order each frame.
 
 ## Where the abstractions stop being free
 
@@ -570,7 +671,7 @@ We have been doing fan-out by hand for three posts now. Every component type add
 
 Adding a tenth component is editing thirty-something call sites, and any one of them being wrong is a silent correctness bug. This is the reason every production ECS in Rust ships with a macro layer.
 
-[freecs](https://github.com/matthewjberger/freecs) is what these three posts scale to. Same data layout, same archetype graph, same query cache, same watermark change detection. The difference is a single declarative `macro_rules!` macro on top that takes one component declaration and writes the entire fan-out for you.
+[freecs](https://github.com/matthewjberger/freecs) is what these three posts scale to. Same data layout, same archetype graph, same query cache, same watermark change detection, same sparse-set tags and event channels. The difference is a single declarative `macro_rules!` macro on top that takes one component declaration and writes the entire fan-out for you.
 
 This is also where the design parts ways with bevy and hecs. Those crates solve the fan-out problem at runtime: a component is registered when first used, stored in a type-erased column, and reached through a `TypeId` lookup and a downcast. That is what lets them accept any user type without code generation, and it costs a layer of dynamic indirection on every access. freecs moves the same work to compile time. Because the macro is handed the complete component set, it can emit a concrete field and a concrete typed accessor per component, so `get_position` is a direct field access with no erasure and no dispatch. The trade is that the component set is fixed when the macro expands rather than open-ended at runtime, which for a single game is the set you already know. The whole equivalent of what we built collapses to one block.
 
@@ -604,7 +705,7 @@ ecs! {
 }
 ```
 
-That declaration generates the `World` struct, the `ComponentArrays`, every typed accessor (`get_position`, `set_position`, `get_position_mut`, `modify_position` for closure-style mutation, `add_position` for adding a defaulted component, `entity_has_position`, and others), `add_components` and `remove_components` with the typed mask helpers, the tag set with its own `add_player`/`has_player`/`query_player`, the double-buffered event queue with `send_collision`/`drain_collision`/`read_collision`, the command buffer with typed `queue_set_position` variants, the table-edge cache, the query cache, and the change-detection tick stamps. The `Schedule` type is a separate piece of the crate and works the same way as the one we built.
+That declaration generates the `World` struct, the `ComponentArrays`, every typed accessor (`get_position`, `set_position`, `get_position_mut`, `modify_position` for closure-style mutation, `add_position` for adding a defaulted component, `entity_has_position`, and others), `add_components` and `remove_components` with the typed mask helpers, the tag set with its own `add_player`/`has_player`/`query_player`, the event channel with `send_collision`, `read_collision`, and the cursor pair `read_collision_since` and `sequence_collision`, the command buffer with typed `queue_set_position` variants, the table-edge cache, the query cache, and the change-detection tick stamps. The `Schedule` type is a separate piece of the crate and works the same way as the one we built.
 
 The scaling answer the hand-built version does not give is right here. Adding `health: Health => HEALTH,` to the declaration writes the entire per-component fan-out for `Health` automatically, every accessor, every storage site, every cache update. Adding a new event type or a new tag is one line. The eleven edits per component become zero edits, and a kernel that handles two component types and one event type handles fifty of each the same way.
 
@@ -634,7 +735,7 @@ The ECS does not solve any of those problems. It makes each of them small and se
 
 ## The full file
 
-The complete file is around 825 lines and lives as a [gist](https://gist.github.com/matthewjberger/4578b6d03514523f5f345951c7395b40). It compiles standalone in a fresh Cargo project. The `main` function spawns a player, an enemy, and a landmark, runs a schedule of four systems for four frames, queues a despawn from inside a system at frame two, and exercises change detection, events, tags, and the command buffer in the process.
+The complete file is around 980 lines and lives as a [gist](https://gist.github.com/matthewjberger/4578b6d03514523f5f345951c7395b40). It compiles standalone in a fresh Cargo project. The `main` function spawns a player, an enemy, and a landmark, runs a schedule of four systems for four frames, queues a despawn from inside a system at frame two, and exercises change detection, events, tags, and the command buffer in the process.
 
 `cargo run` produces four frames of output. Frames 0 and 1 print position-redraw lines for the player and enemy as they close in on each other, with no collision yet because they are still more than one unit apart. Frame 2 prints a collision line followed by both redraw lines as the two entities meet at the same x, and the main loop queues the enemy for despawn at the end of the frame. Frame 3 prints only the player's redraw, since the enemy is gone and the landmark has not moved since spawn. The render-changed system never prints the landmark because nothing has touched its position since the initial `set_position` write, which means its tick stamp stayed at zero while the watermark advanced past it.
 
